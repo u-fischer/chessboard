@@ -1,0 +1,19 @@
+% latex, dvips -E, epstopdf
+\documentclass[parskip]{scrartcl}
+\usepackage[T1]{fontenc}
+\usepackage[skaknew,ps]{skak}
+\usepackage[skaknew]{chessboard}
+
+\pagestyle{empty}
+\begin{document}
+\newgame
+\chessboard[psskak,psset,pgf=false,
+            inverse]
+\ifpdf\else
+\highlight[X]{c4}
+\highlight[o]{a8}
+\highlight[O]{g1}
+\printknightmove{g8}{f6}
+BM\pnode{A}\ncline{->}{A}{BM}
+\fi
+\end{document}

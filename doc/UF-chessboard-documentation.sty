@@ -1,0 +1,220 @@
+\ProvidesFile{UF-xskak-documentation.sty}[2008/01/09 local style for documentations]
+\DeclareOption{codemargin}{\AtEndOfPackage{%
+    \advance\oddsidemargin by 0.5in\relax
+    \advance\marginparwidth by 1in\relax}}
+\ProcessOptions
+\newcommand\filetype[1]     {\upshape\texttt{#1}} %e.g. \filetype{.pdf}
+\newcommand\programm[1]     {\upshape\textsf{#1}} %e.g. \programm{afm2tfm}
+\newcommand\chessfontname[1]{\upshape\textsf{#1}} %e.g. chessfontname{maya}
+\newcommand\konzept[1]      {\upshape\textsf{#1}} %e.g. \konzept{nfss}
+\newcommand\packagename[1]  {\upshape\textsf{#1}}
+
+\newcommand\skaksty{the  package \packagename{skak}\xspace}
+\newcommand\Skaksty{The  package \packagename{skak}\xspace}
+
+\newcommand\xskak{the  package \packagename{xskak}\xspace}
+\newcommand\Xskak{The  package \packagename{xskak}\xspace}
+
+\newcommand\chessfss{the package \packagename{chessfss}\xspace}
+\newcommand\Chessfss{The package \packagename{chessfss}\xspace}
+
+\newcommand\pchessboard{the package \packagename{chessboard}\xspace}
+\newcommand\Pchessboard{The package \packagename{chessboard}\xspace}
+
+
+\newcommand\mynobreakpar{\par\nobreak\@afterheading}
+\newcommand\key[1]{\texttt{#1}}
+\newcommand\obsoletekey[1]{\key{#1}\index{#1 (obsolete)}}
+\providecommand\gobble[1]{}
+\newcommand\keyoarg{\oarg{key=value list}}
+\newcommand\keymarg{\marg{key=value list}}
+\newcommand\keylist{\textit{key=value list}\xspace}
+\newcommand\keylists{\textit{key=value lists}\xspace}
+\newcommand\keyvalue{\textit{key=value}\xspace}
+
+\AtBeginDocument{%
+  \renewcommand*\lstlistlistingname{Examples}
+  \renewcommand*\lstlistingname{Example}
+}
+
+%
+\setcounter{secnumdepth}{4}
+\renewcommand{\theparagraph}{\alph{paragraph})}
+
+
+%% standard needed packages
+\RequirePackage[english]{babel}
+\RequirePackage{microtype}
+
+\RequirePackage{array}
+\RequirePackage{booktabs}
+\RequirePackage{xspace}
+\RequirePackage{ifluatex}
+
+%% fonts
+\ifluatex
+\else
+\RequirePackage[scaled=0.85]{luximono}
+\RequirePackage{fourier}
+\RequirePackage[scaled=0.86]{helvet}
+\fi
+%\addtokomafont{sectioning}{\rmfamily}
+\renewcommand*\descfont{\rmfamily\bfseries}
+
+%% colors
+\RequirePackage{xcolor}
+\colorlet{hellgelb}{yellow!15}
+
+
+% Quotes
+\RequirePackage[babel]{csquotes}
+\MakeAutoQuote {«}{»}
+
+
+%% index
+\RequirePackage{makeidx}
+\makeindex % number of columns set after doc
+
+\begin{filecontents}{\jobname.mst}
+actual '='
+quote '!'
+level '>'
+preamble
+"\n \\begin{theindex} \n \\makeatletter\\scan@allowedfalse\n"
+postamble
+"\n\n \\end{theindex}\n"
+item_x1   "\\efill \n \\subitem "
+item_x2   "\\efill \n \\subsubitem "
+delim_0   "\\pfill "
+delim_1   "\\pfill "
+delim_2   "\\pfill "
+% The next lines will produce some warnings when
+% running Makeindex as they try to cover two different
+% versions of the program:
+lethead_prefix   "{\\bfseries\\hfil "
+lethead_suffix   "\\hfil}\\nopagebreak\n"
+lethead_flag       1
+heading_prefix   "{\\bfseries\\hfil "
+heading_suffix   "\\hfil}\\nopagebreak\n"
+headings_flag       1
+%%
+%%
+\end{filecontents}
+
+
+%% codes and examples
+\begin{filecontents}{UFlstlocal.cfg}
+\ProvidesFile{UFlstlocal.cfg}[2005/07/01 lokale Listingsdefinitionen (UF)]
+
+\RequirePackage{xcolor}
+
+
+\colorlet{UFkeyscolor}{black}
+\colorlet{UFidentifiercolor}{black}
+\colorlet{UFcommentscolor}{red}
+\colorlet{UFstringcolor}{green!50}
+\colorlet{UFbackgroundcolor}{yellow!10}
+
+\lstdefinestyle{inline}{%
+    basicstyle=\ttfamily,
+    keywordstyle={}}
+
+
+\lstdefinestyle{UFdocu}{% mehr oder weniger kopiert aus showexpl.cfg
+     language=[LaTeX]TeX,%
+     float=hbp,%
+     basicstyle=\ttfamily,%
+     identifierstyle=\color{UFidentifiercolor},%
+     keywordstyle=\color{UFkeyscolor},%
+     stringstyle=\color{UFstringcolor},%
+     commentstyle=\itshape,%
+     columns=flexible,%
+     tabsize=4,%
+     frame=single,%
+     extendedchars=true,%
+     showspaces=false,%
+     showstringspaces=false,%
+     numbers=none,%
+     %numberstyle=\tiny\ttfamily,%
+     breaklines=true,%
+     breakindent=10pt,%
+     backgroundcolor=\color{UFbackgroundcolor},%
+     breakautoindent=true,%
+     captionpos=t,%
+     xleftmargin=1em,%
+     xrightmargin=\fboxsep,%
+     %numbersep=1em,%
+     breakatwhitespace=true,
+     preset=\raggedright\setlength{\parskip}{1ex},%
+     explpreset={numbers=none, basicstyle=\footnotesize\ttfamily},% ueberschreibt default
+     rframe={},% code ist im Rahmen
+     varwidth=true,% Breite des Beispiels
+     pos=o,
+     overhang=4em,%
+     literate={ü}{{\"u}}1{ö}{{\"o}}1{ä}{{\"a}}1
+}
+
+\lstdefinestyle{inline}{%
+    basicstyle=\ttfamily,
+    keywordstyle={}}
+
+\newcommand\mylstinline{\lstinline[style=inline]}
+
+\endinput
+%%
+%% End of file `UFlstlocal.cfg'.
+\end{filecontents}
+
+\RequirePackage[final]{showexpl}
+\input{UFlstlocal.cfg}
+\lstset{style=UFdocu}
+
+\newcommand\UFleftexamples{%
+\let\OriisSX@odd\isSX@odd
+\renewcommand*{\isSX@odd}[2]{##2}}
+
+\UFleftexamples
+
+\RequirePackage{doc}
+\def\meta@font@select{\rmfamily\itshape}
+\c@IndexColumns = 2
+\renewcommand\MacroFont{\scriptsize\ttfamily}
+\renewcommand\encapchar{ -- }
+% from ltxdoc.sty
+\DeclareRobustCommand\cs[1]{\texttt{\char`\\#1}}
+\providecommand\marg[1]{%
+  {\ttfamily\char`\{}\meta{#1}{\ttfamily\char`\}}}
+\providecommand\oarg[1]{%
+  {\ttfamily[}\meta{#1}{\ttfamily]}}
+\providecommand\parg[1]{%
+  {\ttfamily(}\meta{#1}{\ttfamily)}}
+
+
+%% pagestyle and layout
+\providecommand\UFcurrentpackage{unknown}
+\providecommand\UFcurrentversion{version unknown}
+
+\reversemarginpar
+
+\RequirePackage{fancyhdr}
+\pagestyle{fancy}
+
+\renewcommand\headrulewidth{0pt}
+\fancyhf{}
+\cfoot{\thepage}
+\lfoot{\today}
+\rfoot{\packagename{\UFcurrentpackage} \UFcurrentversion}
+
+
+%% captions
+\RequirePackage[tableposition=top]{caption}
+\captionsetup{singlelinecheck=false,format=hang,belowskip=1em}
+
+
+
+%% pdf-goodies:
+\RequirePackage{animate}
+\RequirePackage[colorlinks=true, %options are passed to hyperref
+               linkcolor=black,
+               hyperindex=true% true clashes with doc.sty
+               ]{attachfile}

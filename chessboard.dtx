@@ -1,0 +1,5128 @@
+%<*chessboard>
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{chessboard}[2019/06/23 version v1.8 print chessboards]
+%%$Date: 2011/03/23 08:42:57 $$Version: 66142533647c $
+
+%1.4: Changed to restore style key
+%1.5: corrected values for mover key (w/b instead of w/s)
+%1.6: corrected bug in \board@do@getpiecelists (def instead of xdef)
+% 14.3.2011: added \normallineskip=1pt\relax\normallineskiplimit=0pt\relax
+%            (default latex values).
+%            to avoid bad spacing in amsart.cls (see tex.stackexchange discussion)
+\DeclareOption{skaknew}{}%
+\ProcessOptions
+
+\ifx\eTeXversion\@undefined
+  \PackageError{chessboard}
+    {This package may only be run using an\MessageBreak
+     etex in extended mode}
+    {Perhaps you forgot the `*' when making the format with (e)initex.}
+\fi
+
+\ifnum\eTeXversion<2
+  \PackageError{chessboard}
+    {This package requires e-TeX V 2}
+    {You are probably using the obsolete e-TeX V 1.}
+\fi
+
+\RequirePackage{chessfss}[2006/03/31]
+
+
+\RequirePackage{xkeyval}%
+\RequirePackage{xifthen}%
+\RequirePackage{ifpdf}%
+\RequirePackage{tikz}%
+\usepgfmodule{shapes}
+\ifpdf\else
+\RequirePackage{pst-node}%
+\fi
+
+%%%%%%%
+%% naming conventions
+%%%%%%%
+%% internal commands start with board@
+%% counters starts with cnt@board
+%% length starts with len@board
+%% xkeyval commands gets the prefix UFCB (for chess key)
+%% and the families gloinit/locinit, gloset/locset or glofill/locfill
+%% ARGEND is used to end/delimiters inputs
+%%%%%%%%
+
+%%%%
+%% New lengths
+%%%
+
+\newlength\len@board@tempx
+\newlength\len@board@tempy
+
+\newcommand\board@do@getsquaresize[1]{%#1=game
+ \cfss@getsquaresize{\csname board@#1@refpiece\endcsname}}
+
+\newcommand\board@do@globalgetsquaresize[1]{%#1=game
+ \cfss@globalgetsquaresize{\csname board@#1@refpiece\endcsname}}
+
+%%  \settowidth{\global\len@cfss@squarewidth}{\csname board@#1@refpiece\endcsname}%
+%%  \settodepth{\global\len@cfss@squaredepth}{\csname board@#1@refpiece\endcsname}%
+%%  \settoheight{\global\len@cfss@squaretotalheight}{\raisebox{\depth}{\csname board@#1@refpiece\endcsname}}}%
+%%
+
+%%%
+%% New counters
+%%%
+
+%% counters for interating throught files and ranks
+%% Temporary counters, never rely on a value when not set at the start of the loop/command!
+\newcounter{cnt@board@file}%
+\newcounter{cnt@board@rank}%
+\newcounter{cnt@board}%
+
+%% User counters for printing the file and rank numbers.
+\newcounter{filelabel}%
+\renewcommand\thefilelabel{\alph{filelabel}}%
+\newcounter{ranklabel}%
+\renewcommand\theranklabel{\arabic{ranklabel}}
+
+%%%%%
+%% various tools
+%%%%%
+
+%% New setkeys command for inner keys, stolen from xkeyval.tex
+
+\def\board@do@setsinglekeys{\XKV@testopta{\XKV@testoptc\board@XKVsetsinglekeys}}%
+\def\board@XKVsetsinglekeys[#1]#2{%
+  \XKV@checksanitizea{#2}\XKV@resb
+  \let\XKV@naa\@empty
+  \XKV@for@o\XKV@resb\XKV@tempa{%
+    \expandafter\XKV@g@tkeyname\XKV@tempa=\@nil\XKV@tempa
+    \XKV@addtolist@x\XKV@naa\XKV@tempa}%
+  \expandafter\XKV@s@tkeys\expandafter{\XKV@resb}{#1}}%
+
+
+\newcommand\board@do@setsavedkey[2]{%#1 = argument (so that it can be better expanded)
+                                    % #2=key
+ \board@do@setsinglekeys*[UFCB]{locfill}{#2=#1}}%
+
+%%% local addto
+
+\newcommand{\board@do@l@addto@macro}[2]{%
+  \edef#1{\unexpanded\expandafter{#1#2}}}
+
+%%% alphabetic numbering with zero, adapted from latex.ltx
+
+\newcommand\zeroalph{}
+
+\def\zeroalph#1{\expandafter\@zeroalph\csname c@#1\endcsname}%
+
+\def\@zeroalph#1{%
+  \ifcase#1Z\or a\or b\or c\or d\or e\or f\or g\or h\or i\or j\or
+   k\or l\or m\or n\or o\or p\or q\or r\or s\or t\or u\or v\or w\or x\or
+    y\or z\else\@ctrerr\fi}%
+
+%% expanded @namedef
+\def\board@enamedef#1{\expandafter\edef\csname #1\endcsname}%
+
+%% new tests
+
+\newtest{\board@test@isonactivecolor}[2]{%filenr, ranknr b2={2}{2}
+ \(\board@test@iswhitefield{#1}{#2}
+ \AND
+ \boolean{UFCB@locfill@useonwhite}\)
+ \OR
+ \(
+ \(\NOT\board@test@iswhitefield{#1}{#2}\)
+ \AND
+ \boolean{UFCB@locfill@useonblack}\)}
+
+\newtest{\board@test@iswhitefield}[2]{%filenr, ranknr b2={2}{2}
+ \isodd{\number\numexpr #1+#2\relax}}
+
+\newtest{\board@test@isfieldintrimarea}[2]{%%filenr, ranknr
+ \NOT \(#1<\board@val@starttrimfilenum\) \AND
+ \NOT  \(#1>\board@val@stoptrimfilenum\) \AND
+ \NOT \(#2>\board@val@starttrimranknum\) \AND
+ \NOT  \(#2<\board@val@stoptrimranknum\)}
+
+\newtest{\board@test@isareaintrimarea}[4]{%%startfilenr, ranknr
+                                          %%stopfilenr, ranknr
+ \NOT \(#1<\board@val@starttrimfilenum\) \AND
+ \NOT  \(#3>\board@val@stoptrimfilenum\) \AND
+ \NOT \(#2>\board@val@starttrimranknum\) \AND
+ \NOT  \(#4<\board@val@stoptrimranknum\)}
+
+%%%%%
+%% converting commands
+%%%%%
+
+%%% command to get a (input) char from a number
+\newcommand*\board@conv@numbertochar[1]{{\uccode`!=#1\relax\uppercase{\gdef\board@temp@char{!}}}}%
+
+%% converts a filechar to a number and stores the value in counter #2
+%% in simple case use  \number `#1
+\newcommand*\board@conv@filechartonumber[2]{%
+  \setcounter{#2}{\number`#1 }%
+    \ifthenelse
+     {\value{#2} = 90}%
+     % char =Z
+     {\addtocounter{#2}{-90}}%
+     {\ifthenelse
+       {\value{#2} >96 \AND \value{#2} <123}%
+       %char a-z
+       {\addtocounter{#2}{-96}}%
+         {\PackageError{chessboard}%
+           {Wrong field input}%
+           {chars for files should be Z (for zero) or between a-z}}}}%
+
+%% converts a char to the lower case (to set white and black pieces)
+\newcommand*\board@conv@chartolowerchar[1]{% #1 char
+  \setcounter{cnt@board}{\number`#1 }%
+    \ifthenelse
+     {\value{cnt@board} > 64 \AND \value{cnt@board} < 91}%
+     % char between A-Z
+     {\addtocounter{cnt@board}{+32}%
+      \board@conv@numbertochar{\the\c@cnt@board}}%
+     {\def\board@temp@char{#1}}}%
+
+%% converts a char to the upper case (to set white and black pieces)
+\newcommand*\board@conv@chartoupperchar[1]{% #1 char,
+  \setcounter{cnt@board}{\number`#1 }%
+    \ifthenelse
+     {\value{cnt@board} > 96 \AND \value{cnt@board} < 123}%
+     % char between a-z
+     {\addtocounter{cnt@board}{-32}%
+      \board@conv@numbertochar{\the\c@cnt@board}}%
+     {\def\board@temp@char{#1}}}%
+
+%%%%%
+%% splitting commands
+%%%%%
+
+%% split piece positions like Ka1, Qb3 or Rz20:
+%% use as \board@split@pieceposition Ka10ARGEND
+\def\board@split@pieceposition#1#2#3ARGEND{%
+  \edef\board@temp@curpiece{#1}%
+  \edef\board@temp@curfilechar{#2}%
+  \edef\board@temp@curranknum{\number#3}%
+  \board@conv@filechartonumber{#2}{cnt@board}%
+  \edef\board@temp@curfilenum{\the\value{cnt@board}}}%
+
+%% split fields like a1, b3 or z20:
+%% use as \board@split@field a1ARGEND
+\def\board@split@field#1#2ARGEND{%
+  \edef\board@temp@curfilechar{#1}%
+  \edef\board@temp@curranknum{\number#2}%
+  \board@conv@filechartonumber{#1}{cnt@board}%
+  \edef\board@temp@curfilenum{\the\value{cnt@board}}}%
+
+%% split area like a1-b3
+\def\board@split@area#1-#2ARGEND{%
+  \expandafter\board@split@field#1ARGEND%
+  \let\board@temp@curstartfilenum\board@temp@curfilenum
+  \let\board@temp@curstartranknum\board@temp@curranknum
+  \let\board@temp@curstartfilechar\board@temp@curfilechar
+  \edef\board@temp@curstartfield{\board@temp@curstartfilechar\board@temp@curstartranknum}%
+  \expandafter\board@split@field#2ARGEND%
+  \let\board@temp@curstopfilenum\board@temp@curfilenum
+  \let\board@temp@curstopranknum\board@temp@curranknum%
+  \let\board@temp@curstopfilechar\board@temp@curfilechar
+  \edef\board@temp@curstopfield{\board@temp@curstopfilechar\board@temp@curstopranknum}%
+  }%
+
+%% split and sorts areas like a1-b3
+\def\board@split@areasort#1-#2ARGEND{%
+  \expandafter\board@split@field#1ARGEND%
+  \let\board@temp@curstartfilenum\board@temp@curfilenum
+  \let\board@temp@curstartranknum\board@temp@curranknum
+  \let\board@temp@curstartfilechar\board@temp@curfilechar
+  \expandafter\board@split@field#2ARGEND%
+  \ifthenelse%
+   {\board@temp@curstartfilenum<\board@temp@curfilenum}%
+   {\let\board@temp@curstopfilenum\board@temp@curfilenum
+    \let\board@temp@curstopfilechar\board@temp@curfilechar}%
+   {\let\board@temp@curstopfilenum\board@temp@curstartfilenum
+    \let\board@temp@curstopfilechar\board@temp@curstartfilechar
+    \let\board@temp@curstartfilenum\board@temp@curfilenum
+    \let\board@temp@curstartfilechar\board@temp@curfilechar}%
+  \ifthenelse%
+   {\board@temp@curstartranknum>\board@temp@curranknum}%
+   {\let\board@temp@curstopranknum\board@temp@curranknum}%
+   {\let\board@temp@curstopranknum\board@temp@curstartranknum
+    \let\board@temp@curstartranknum\board@temp@curranknum}%
+  \edef\board@temp@curstartfield{\board@temp@curstartfilechar\board@temp@curstartranknum}%
+  \edef\board@temp@curstopfield{\board@temp@curstopfilechar\board@temp@curstopranknum}%
+  }%
+
+\newcommand\board@do@cliparea[1]{%
+    \expandafter\board@split@areasort#1ARGEND%
+    \ifthenelse%
+    {\board@temp@curstartfilenum<\board@val@startprintfilenum}%
+    {\let\board@temp@curstartfilechar\board@val@startprintfilechar%
+     \let\board@temp@curstartfilenum\board@val@startprintfilenum}%
+    {}%
+    \ifthenelse%
+    {\board@temp@curstartranknum>\board@val@startprintranknum}%
+    {\let\board@temp@curstartranknum\board@val@startprintranknum}%
+    {}%
+    \ifthenelse%
+    {\board@temp@curstopranknum<\board@val@stopprintranknum}%
+    {\let\board@temp@curstopranknum\board@val@stopprintranknum}%
+    {}%
+    \ifthenelse%
+    {\board@temp@curstopfilenum>\board@val@stopprintfilenum}%
+    {\let\board@temp@curstopfilechar\board@val@stopprintfilechar
+     \let\board@temp@curstopfilenum\board@val@stopprintfilenum}%
+    {}%
+    \ifthenelse{\board@temp@curstopfilenum<\board@temp@curstartfilenum}%
+    {\edef\board@temp@curcliparea{}}%
+    {\ifthenelse{\board@temp@curstartranknum<\board@temp@curstopranknum}%
+     {\edef\board@temp@curcliparea{}}%
+     {\edef\board@temp@curcliparea{%
+      \board@temp@curstartfilechar\board@temp@curstartranknum-%
+      \board@temp@curstopfilechar\board@temp@curstopranknum}}}}
+
+%%% Making lists
+
+\newcommand\board@do@getfieldcolorlists{%
+  \setcounter{cnt@board@file}{\board@val@startprintfilenum}%
+  \def\board@val@blackfieldlist{}%
+  \def\board@val@whitefieldlist{}%
+  \whiledo%
+   {\value{cnt@board@file}< \numexpr\board@val@stopprintfilenum+1\relax}%
+   {\setcounter{cnt@board@rank}{\board@val@stopprintranknum}%
+    \whiledo%
+     {\value{cnt@board@rank}<\numexpr\board@val@startprintranknum + 1\relax}%
+     {\setcounter{cnt@board}{\numexpr \the\c@cnt@board@file+\the\c@cnt@board@rank\relax}%
+      \ifthenelse%
+       {\isodd{\value{cnt@board}}}
+       {\ifthenelse%
+         {\equal{\board@val@whitefieldlist}{}}%
+         {\edef\board@val@whitefieldlist{\zeroalph{cnt@board@file}\arabic{cnt@board@rank}}}%
+         {\edef\board@temp@curfield{\zeroalph{cnt@board@file}\arabic{cnt@board@rank}}%
+          \expandafter\board@do@l@addto@macro\expandafter\board@val@whitefieldlist\expandafter{\expandafter,\board@temp@curfield}}}%
+       {\ifthenelse%
+         {\equal{\board@val@blackfieldlist}{}}%
+         {\edef\board@val@blackfieldlist{\zeroalph{cnt@board@file}\arabic{cnt@board@rank}}}%
+         {\edef\board@temp@curfield{\zeroalph{cnt@board@file}\arabic{cnt@board@rank}}%
+          \expandafter\board@do@l@addto@macro\expandafter\board@val@blackfieldlist\expandafter{\expandafter,\board@temp@curfield}}}%
+      \addtocounter{cnt@board@rank}{1}}%
+    \addtocounter{cnt@board@file}{1}}}%
+
+%% getting the list of fields where pieces resides
+%% added 2007-12-11, version 1.5.
+%% the piecelists are stored in cblist<english! char of piece>
+
+\newcommand\board@do@getpiecelists{%
+ \setcounter{cnt@board@file}{\board@val@minfilenum}%
+ \setcounter{cnt@board@rank}{\board@val@minranknum}%
+ \edef\board@temp@curlist{%
+ \csname board@\board@val@game @piececharlist\endcsname}%
+ \@for\board@temp@piecechar:=\board@temp@curlist
+  \do {%
+   \expandafter\xdef\csname cblist\board@temp@piecechar\endcsname{}%
+   \expandafter\xdef\csname board@temp@\board@temp@piecechar @comma\endcsname{}}%
+ \xdef\cblistempty{}%
+ \def\board@temp@empty@comma{}%
+ \whiledo
+  {\value{cnt@board@file}<\numexpr \board@val@maxfilenum+1\relax}%
+  {\whiledo
+   {\value{cnt@board@rank}<\numexpr \board@val@maxranknum+1\relax}%
+   {\edef\board@temp@piecechar{%
+     \csname
+       board@val@f\the\c@cnt@board@file r\the\c@cnt@board@rank @piecechar\endcsname}%
+   \edef\board@temp@curlist{%
+    \csname cblist\board@temp@piecechar\endcsname}%
+   \edef\board@temp@comma{%
+    \csname board@temp@\board@temp@piecechar @comma\endcsname}%
+   \expandafter\xdef\csname cblist\board@temp@piecechar \endcsname{%
+    \board@temp@curlist
+    \board@temp@comma
+    \alph{cnt@board@file}\the\c@cnt@board@rank}%
+   \expandafter\def
+     \csname board@temp@\board@temp@piecechar @comma\endcsname
+     {,}%
+   \stepcounter{cnt@board@rank}}%
+   \setcounter{cnt@board@rank}{\board@val@minranknum}%
+   \stepcounter{cnt@board@file}}}
+
+
+
+%%splitting an FEN in pieces,
+%%% use as \board@split@fen <arg>X X X X X X ARGEND
+%%% or as \board@split@fen <arg> X X X X X X ARGEND
+\def\board@split@fen#1 #2 #3 #4 #5 #6 #7ARGEND{%
+  \def\board@val@position{#1}%
+  \ifthenelse{\equal{#2}{X}}%
+   {}%
+   {\def\board@val@mover{#2}}%
+  \ifthenelse{\equal{#3}{X}}%
+   {}%
+   {\def\board@val@castling{#3}}%
+  \ifthenelse{\equal{#4}{X}}%
+   {}%
+   {\def\board@val@enpassant{#4}}%
+  \ifthenelse{\equal{#5}{X}}%
+   {}%
+   {\def\board@val@halfmove{#5}}%
+  \ifthenelse{\equal{#6}{X}}%
+   {}%
+   {\def\board@val@fullmove{#6}}%
+    }%
+
+\input{chessboard-keys-main.sty}%
+\input{chessboard-keys-pgf.sty}%
+\input{chessboard-pgf.sty}
+
+%%% command to store the piece for a field
+%%% the input char of the piece is translated to english first
+%%% the char is stored in the command
+%%% board@val@f<filenum>r<ranknum>@piecechar
+
+\newcommand\board@do@storepieceonfield[3]{%#1 piece #2file #3 rank
+  \ifcsname board@val@lang\board@val@curlang @#1\endcsname
+    \expandafter\edef\csname board@val@f#2r#3@piecechar\endcsname{%
+      \csname board@val@lang\board@val@curlang @#1\endcsname}%
+  \else
+    \PackageError{chessboard}%
+      {Char #1 unknown in input language  \board@val@curlang!}%
+      {You either misspelled the char for the piece or forgot to define it for the current language}%
+  \fi}%
+
+%%% Command to get the piece of a field. Don't know if needed
+
+\newcommand\board@do@getpieceoffield[2]{%#1 file, #2 rank
+    \@nameuse{board@val@f#1r#2@piecechar}}%
+
+%%% Commands to print (or not print) the piece of a field:
+
+%%% prints an empty field
+\newcommand\board@do@printfieldempty[2]{%fileNr, rankNr
+  \ifthenelse%
+     {\board@test@iswhitefield{#1}{#2}}%white field
+     {\@nameuse{board@\board@val@game @piece@empty@white}}%
+     {\@nameuse{board@\board@val@game @piece@empty@black}}}
+
+%%% the command to print the content of a single field
+\newcommand\board@do@printfieldcontent[2]{%% 1=fileNr 2=rankNr
+   \ifcsname board@val@f#1r#2@piecechar\endcsname
+    \ifthenelse{\board@test@iswhitefield{#1}{#2}}%white field
+               {\@nameuse{board@the@piece@\@nameuse{board@val@f#1r#2@piecechar}@white}}%
+               {\@nameuse{board@the@piece@\@nameuse{board@val@f#1r#2@piecechar}@black}}%
+
+%%               {\@nameuse{board@\board@val@game @piece@\@nameuse{board@val@f#1r#2@piecechar}@white}}%
+%%               {\@nameuse{board@\board@val@game @piece@\@nameuse{board@val@f#1r#2@piecechar}@black}}%
+   \else
+    \board@do@printfieldempty{#1}{#2}%
+   \fi}%
+
+%%% the command to print a fieldbox
+\newcommand\board@do@printfieldbox[2]{% 1=fileNr 2=rank
+  \def\board@temp@curfilenum{#1}%
+  \def\board@temp@curranknum{#2}%
+  \raisebox{\len@cfss@squaredepth}[\len@cfss@squaretotalheight][0pt]{%
+    \makebox[\len@cfss@squarewidth][r]{%
+      %% can be used to color only the piece in fonts with masks
+      % deleted 01.06.2006
+      %\def\cfss@piececolor{\csname board@val@f#1r#2@color\endcsname}%
+      %\csname board@val@f#1r#2@color\endcsname
+      \csname board@val@f#1r#2@emph\endcsname % eg. for color, bfseries
+       \makebox[\len@cfss@squarewidth]{%
+         \vphantom{\csname board@\board@val@game @refpiece\endcsname}%
+         \ifcsname board@the@f#1r#2\endcsname
+           \csname board@the@f#1r#2\endcsname
+         \else
+           \board@do@printfieldcontent{#1}{#2}%
+         \fi}}}}%
+
+%%% command to print a rank/row from firstfile to lastfile
+\newcommand\board@do@printrank[3]%#1 rank/rownumber #2 firstfile, #3 lastfile
+ {\begingroup
+  \ifUFCB@locset@labelleft
+  \board@do@printlabelleftfield{#1}%
+  \fi
+  \ifthenelse{#2<#3}%
+   {\setcounter{cnt@board@file}{#2}%% #2<#3: 1->n/normal
+    \whiledo%
+     {\value{cnt@board@file}<#3
+      \OR
+      \value{cnt@board@file}=#3}%
+     {\board@do@printfieldbox{\number\value{cnt@board@file}}{#1}%
+      \stepcounter{cnt@board@file}}}%
+   {\setcounter{cnt@board@file}{#2}%% #2>#3 n->1/inverse
+    \whiledo%
+     {\value{cnt@board@file}>#3
+      \OR
+      \value{cnt@board@file}=#3}%
+     {\board@do@printfieldbox{\number\value{cnt@board@file}}{#1}%
+      \addtocounter{cnt@board@file}{-1}}}%
+    \ifUFCB@locset@labelright
+    \board@do@printlabelrightfield{#1}%
+    \fi
+    \endgroup}%
+
+%%% command to hide /show a fields content:
+
+\newcommand*\board@do@showfield[2]{%
+  \@namedef{board@the@f#1r#2}{\board@do@printfieldcontent{#1}{#2}}}
+
+\newcommand*\board@do@showarea[1]{%
+ \expandafter\board@split@areasort#1ARGEND%
+ %% initialisation
+ \setcounter{cnt@board@file}{\board@temp@curstartfilenum}%
+ \setcounter{cnt@board@rank}{\board@temp@curstartranknum}%
+ %
+ \whiledo
+  {\value{cnt@board@rank}>\numexpr \board@temp@curstopranknum-1\relax}%
+  {\setcounter{cnt@board@file}{\board@temp@curstartfilenum}%
+   \whiledo
+    {\value{cnt@board@file}<\numexpr \board@temp@curstopfilenum+1\relax}%
+    {\board@do@showfield{\number\value{cnt@board@file}}{\number\value{cnt@board@rank}}%
+     \addtocounter{cnt@board@file}{1}%
+     }%
+   \addtocounter{cnt@board@rank}{-1}}}%
+
+\newcommand*\board@do@hidefield[2]{%
+  \@namedef{board@the@f#1r#2}{%
+  \board@do@printfieldempty{#1}{#2}}}
+
+\newcommand*\board@do@hidearea[1]{%
+ \expandafter\board@split@areasort#1ARGEND%
+ %% initialisation
+ \setcounter{cnt@board@file}{\board@temp@curstartfilenum}%
+ \setcounter{cnt@board@rank}{\board@temp@curstartranknum}%
+ %
+ \whiledo
+  {\value{cnt@board@rank}>\numexpr \board@temp@curstopranknum-1\relax}%
+  {\setcounter{cnt@board@file}{\board@temp@curstartfilenum}%
+   \whiledo
+    {\value{cnt@board@file}<\numexpr \board@temp@curstopfilenum+1\relax}%
+    {\board@do@hidefield{\number\value{cnt@board@file}}{\number\value{cnt@board@rank}}%
+     \addtocounter{cnt@board@file}{1}%
+     }%
+   \addtocounter{cnt@board@rank}{-1}}}%
+
+%% Command to hide a piece type
+
+\newcommand*\board@do@hidetype[1]{% char or empty
+  \ifthenelse%
+   {\equal{#1}{empty}}%
+   {\def\board@temp@char{empty}}%
+   {\board@do@strip #1 ARGEND}%
+  \ifcsname board@val@lang\board@val@curlang @\board@temp@char\endcsname
+   \edef\board@temp@curpiece{%
+      \csname board@val@lang\board@val@curlang @\board@temp@char\endcsname}%
+  \else
+    \PackageError{chessboard}%
+      {Char #1 unknown in input language \board@val@curlang!}%
+      {You either misspelled the char for the piece or forgot to define it for the current language}%
+  \fi
+  \@namedef{board@the@piece@\board@temp@curpiece @white}{%
+   \@nameuse{board@\board@val@game @piece@empty@white}}%
+  \@namedef{board@the@piece@\board@temp@curpiece @black}{%
+   \@nameuse{board@\board@val@game @piece@empty@black}}}%
+
+\newcommand*\board@do@hidetypelist[1]{% charlist
+ \@for\board@temp@char:=#1\do
+ {\expandafter\board@do@hidetype\expandafter{\board@temp@char}}}
+
+%% Command to show a piece type
+
+\def\board@do@strip #1#2ARGEND{\def\board@temp@char{#1}}
+
+\newcommand*\board@do@showtype[1]{% char or empty
+  \ifthenelse%
+   {\equal{#1}{empty}}%
+   {\def\board@temp@char{empty}}%
+   {\board@do@strip #1 ARGEND}%
+  \ifcsname board@val@lang\board@val@curlang @\board@temp@char\endcsname
+   \edef\board@temp@curpiece{%
+      \csname board@val@lang\board@val@curlang @\board@temp@char\endcsname}%
+  \else
+    \PackageError{chessboard}%
+      {Char #1 unknown in input language  \board@val@curlang!}%
+      {You either misspelled the char for the piece or forgot to define it for the current language}%
+  \fi
+  \board@enamedef{board@the@piece@\board@temp@curpiece @white}{%
+   \noexpand\@nameuse{board@\noexpand\board@val@game @piece@\board@temp@curpiece @white}}%
+  \board@enamedef{board@the@piece@\board@temp@curpiece @black}{%
+   \noexpand\@nameuse{board@\noexpand\board@val@game @piece@\board@temp@curpiece @black}}}%
+
+\newcommand*\board@do@showtypelist[1]{% charlist
+ \@for\board@temp@char:=#1\do
+ {\expandafter\board@do@showtype\expandafter{\board@temp@char}}}
+
+%%% Clear area
+
+\newcommand\board@do@cleararea[1]{%
+ \expandafter\board@split@areasort#1ARGEND%
+ %% initialisation
+ \setcounter{cnt@board@file}{\board@temp@curstartfilenum}%
+ \setcounter{cnt@board@rank}{\board@temp@curstartranknum}%
+ %
+ \whiledo
+  {\value{cnt@board@rank}>\numexpr \board@temp@curstopranknum-1\relax}%
+  {\setcounter{cnt@board@file}{\board@temp@curstartfilenum}%
+   \whiledo
+    {\value{cnt@board@file}<\numexpr \board@temp@curstopfilenum+1\relax}%
+    {\board@do@storepieceonfield{empty}{\number\value{cnt@board@file}}{\number\value{cnt@board@rank}}%
+     \addtocounter{cnt@board@file}{1}}%
+   \addtocounter{cnt@board@rank}{-1}}}%
+
+%%%%%%
+%% Scanning a FEN (only the first part) to set the fields
+%%%%%%
+
+\def\@usenone@until@nil#1\@nil{}%
+
+\newcommand\board@scan@fen[1]{%
+  \setcounter{cnt@board@rank}{\board@val@startfenranknum}%
+  \setcounter{cnt@board@file}{\board@val@startfenfilenum}%
+  \expandafter\board@scan@fennext#1\relax\@nil}%
+
+\newcommand\board@scan@fennext[1]{%
+  \ifx#1\relax \expandafter\@usenone@until@nil \fi
+  \afterassignment\board@fork@feninput\count@ 0#1}%
+
+\newcommand\board@fork@feninput{%
+  \ifnum\count@=\z@
+    \expandafter\board@do@process@fenchar
+  \else
+    \expandafter\board@do@process@fennumber
+  \fi}%
+
+\newcommand\board@do@process@fennumber{%
+  \whiledo%
+   {\the\count@>0}%
+   {\ifthenelse%
+     {\(\value{cnt@board@file}>\board@val@startfillfilenum
+        \OR
+        \value{cnt@board@file}=\board@val@startfillfilenum\)
+      \AND
+      \(\value{cnt@board@file}<\board@val@stopfillfilenum
+        \OR
+        \value{cnt@board@file}=\board@val@stopfillfilenum\)
+      \AND
+      \(\value{cnt@board@rank}<\board@val@startfillranknum
+        \OR
+        \value{cnt@board@rank}=\board@val@startfillranknum\)
+      \AND
+      \(\value{cnt@board@rank}>\board@val@stopfillranknum
+        \OR
+        \value{cnt@board@rank}=\board@val@stopfillranknum\)}
+     {\board@do@storepieceonfield{empty}{\the\value{cnt@board@file}}{\the\value{cnt@board@rank}}}%
+     {}%
+    \addtocounter{cnt@board@file}{1}%
+    \advance\count@-1\relax}%
+  \board@scan@fennext}%
+
+\newcommand\board@do@process@fenchar[1]{%
+  \ifthenelse%
+   {\equal{#1}{/}}%
+   {\setcounter{cnt@board@file}{\board@val@startfenfilenum}% new row
+    \addtocounter{cnt@board@rank}{-1}}%
+   {\ifthenelse%
+     %{\value{cnt@board@file}>\board@val@stopfillfilenum}%
+     {\(\value{cnt@board@file}>\board@val@startfillfilenum
+        \OR
+        \value{cnt@board@file}=\board@val@startfillfilenum\)
+      \AND
+      \(\value{cnt@board@file}<\board@val@stopfillfilenum
+        \OR
+        \value{cnt@board@file}=\board@val@stopfillfilenum\)
+      \AND
+      \(\value{cnt@board@rank}<\board@val@startfillranknum
+        \OR
+        \value{cnt@board@rank}=\board@val@startfillranknum\)
+      \AND
+      \(\value{cnt@board@rank}>\board@val@stopfillranknum
+        \OR
+        \value{cnt@board@rank}=\board@val@stopfillranknum\)}
+    %
+     {\board@do@storepieceonfield{#1}{\the\value{cnt@board@file}}{\the\value{cnt@board@rank}}%
+      \addtocounter{cnt@board@file}{1}}%
+     {\addtocounter{cnt@board@file}{1}}%
+   }%
+  \board@scan@fennext}%
+
+%%% Command to add pieces
+
+\newcommand\board@do@addpieces[1]{% List
+  \@for\board@temp@curpiecepos:=#1\do
+    {\expandafter\board@split@pieceposition\board@temp@curpiecepos ARGEND%
+     \board@do@storepieceonfield{\board@temp@curpiece}{\board@temp@curfilenum}{\board@temp@curranknum}}}%
+
+\newcommand\board@do@addwhitepieces[1]{% List
+  \@for\board@temp@curpiecepos:=#1\do
+    {\expandafter\board@split@pieceposition\board@temp@curpiecepos ARGEND%
+     \expandafter\board@conv@chartoupperchar\board@temp@curpiece
+     \board@do@storepieceonfield{\board@temp@char}{\board@temp@curfilenum}{\board@temp@curranknum}}}%
+
+\newcommand\board@do@addblackpieces[1]{% List
+  \@for\board@temp@curpiecepos:=#1\do
+    {\expandafter\board@split@pieceposition\board@temp@curpiecepos ARGEND%
+     \expandafter\board@conv@chartolowerchar\board@temp@curpiece
+     \board@do@storepieceonfield{\board@temp@char}{\board@temp@curfilenum}{\board@temp@curranknum}}}%
+
+%%% Command  to save fen
+
+%%% goes through board and get the fen description of the position
+
+\newcommand*\board@do@getposition{%
+  \setcounter{cnt@board@rank}{\board@val@startstoreranknum}%
+  \board@do@getrankposition{\value{cnt@board@rank}}%
+  \edef\board@val@position{\board@temp@currankposition}%
+  \whiledo%
+   {\value{cnt@board@rank}>\numexpr \board@val@stopstoreranknum\relax}%
+   {\addtocounter{cnt@board@rank}{-1}%
+    \board@do@getrankposition{\value{cnt@board@rank}}%
+    \edef\board@val@position{\board@val@position/\board@temp@currankposition}}}%
+
+\newcommand*\board@do@getrankposition[1]{%
+  \setcounter{cnt@board@file}{\board@val@startstorefilenum}%
+  \setcounter{cnt@board}{0}%
+  \edef\board@temp@currankposition{}%
+  \whiledo%
+   {\value{cnt@board@file}<\numexpr \board@val@stopstorefilenum+1\relax}%
+   {\ifthenelse%
+     {\equal{\csname board@val@f\the\c@cnt@board@file r#1@piecechar\endcsname}{empty}}%
+     {\stepcounter{cnt@board}}%
+     {\ifthenelse%
+       {\value{cnt@board}>0}%
+       {\edef\board@temp@currankposition{%
+          \board@temp@currankposition
+          \arabic{cnt@board}%
+          \csname board@val@f\the\c@cnt@board@file r\the\c@cnt@board@rank @piecechar\endcsname}%
+        \setcounter{cnt@board}{0}}%
+       {\edef\board@temp@currankposition{%
+          \board@temp@currankposition
+          \csname board@val@f\the\c@cnt@board@file r\the\c@cnt@board@rank @piecechar\endcsname}}}%
+    \addtocounter{cnt@board@file}{1}}%
+  \ifthenelse%
+   {\value{cnt@board}>0}%
+   {\edef\board@temp@currankposition{%
+      \board@temp@currankposition
+      \arabic{cnt@board}}}%
+   {}}%
+
+%% stores the fen in chessgame.<name> (as in skak.sty the \storegame command
+
+\newcommand*\board@do@storefen[1]{%
+  \def\board@temp@curfen{}%
+  \board@do@getposition
+  \edef\board@temp@curfen{\board@val@position\space
+                          \board@val@mover\space
+                          \board@val@castling\space
+                          \board@val@enpassant\space
+                          \board@val@halfmove\space
+                          \board@val@fullmove}%
+  \expandafter\xdef\csname chessgame.#1\endcsname{\board@temp@curfen}}%
+
+%% stores the fen in a file, as in skak.sty the \savegame command
+\newcommand*\board@do@savefen[1]{%
+  \def\board@temp@curfen{}%
+  \board@do@getposition
+  \edef\board@temp@curfen{\board@val@position\space
+                          \board@val@mover\space
+                          \board@val@castling\space
+                          \board@val@enpassant\space
+                          \board@val@halfmove\space
+                          \board@val@fullmove}%
+  \toks0=\expandafter{\board@temp@curfen}%
+  \immediate\openout0=#1.fen%
+  \immediate\write0{\the\toks0}%
+  \immediate\closeout0}%
+
+\newcommand*\board@do@loadfen[1]{%
+   \immediate\openin0=#1.fen\relax
+   \ifeof0
+   \PackageError{chessboard}{File #1.fen not found}{}%
+   \else
+   \immediate\read0 to \board@temp@curfen%
+   \fi
+   \immediate\closein0\relax}
+
+%%%%
+%% Decoration
+%%%%
+
+%%% the command to print the mover
+
+\newcommand\board@do@printtopmover{%
+  \raisebox%
+   {\dimexpr
+     \numexpr\board@val@startprintranknum-\board@val@stopprintranknum+1\relax\len@cfss@squaretotalheight
+     -\board@val@movertoplift
+     -\height
+   \relax}[0pt][0pt]%
+   {\makebox[0pt][l]{%
+     \hspace*{\board@val@movertopshift}%
+     \fontsize{\board@val@moversize}{\board@val@moversize}\selectfont
+     \ifthenelse%
+      {\equal{\board@val@mover}{w}}%
+      {\ifUFCB@locset@inverse
+       \board@val@moverwhitetop
+       \fi}%
+      {\ifUFCB@locset@inverse\else
+       \board@val@moverblacktop
+       \fi}}}}%
+
+\newcommand\board@do@printbottommover{%#1=color}
+  \raisebox%
+   {\board@val@moverbottomlift}[0pt][0pt]%
+   {\makebox[0pt][l]{%
+     \hspace*{\board@val@moverbottomshift}%
+     \fontsize{\board@val@moversize}{\board@val@moversize}\selectfont
+    \ifthenelse%
+     {\equal{\board@val@mover}{w}}%
+     {\ifUFCB@locset@inverse
+      \else
+       \board@val@moverwhitebottom
+      \fi}%
+     {\ifUFCB@locset@inverse
+       \board@val@moverblackbottom
+      \fi}}}}%
+
+\newcommand\cbDefineMoverStyle[6][]{%
+ % #1 can be used for checks
+ %#2name, #3=white top, #4=white bottom, #5=black top, #6=black bottom
+    \@namedef{board@val@moverstyle@#2}{%
+     #1\relax
+     \def\board@val@moverwhitetop{#3}%
+     \def\board@val@moverwhitebottom{#4}%
+     \def\board@val@moverblacktop{#5}%
+     \def\board@val@moverblackbottom{#6}}}%
+
+\cbDefineMoverStyle%
+    {circle}
+    {$\circ$}
+    {$\circ$}
+    {$\bullet$}
+    {$\bullet$}
+
+\cbDefineMoverStyle%
+    {square}
+    {\tikz \draw[color=black] (0,0) rectangle (0.65em,0.65em);}
+    {\tikz \draw[color=black] (0,0) rectangle (0.65em,0.65em);}
+    {\tikz \fill[color=black] (0,0) rectangle (0.65em,0.65em);}
+    {\tikz \fill[color=black] (0,0) rectangle (0.65em,0.65em);}
+
+\cbDefineMoverStyle%
+ {triangle}
+ {\tikz \draw[color=black] (0.6ex,0pt)--(0,1.25ex)--(1.2ex,1.25ex) --cycle;}
+ {\tikz \draw[color=black] (0.6ex,1.25ex)--(0,0)--(1.2ex,0) --cycle;}
+ {\tikz \fill[color=black] (0.6ex,0pt)--(0,1.25ex)--(1.2ex,1.25ex) --cycle;}
+ {\tikz \fill[color=black] (0.6ex,1.25ex)--(0,0)--(1.2ex,0) --cycle;}
+
+
+\cbDefineMoverStyle%
+ %#1: optional, can be used for checks
+ %#2=style name, #3=white top, #4=white bottom, #5=black top, #6=black bottom
+    [\@ifundefined%
+      {rotatebox}%
+      {\PackageError{chessboard}%
+        {You must load the package graphics or graphicx
+         if you want to use the mover style squarearrow}{}}%
+      {}%
+     \@ifundefined%
+      {ding}%
+      {\PackageError{chessboard}%
+        {You must load the package pifont
+         if you want to use the mover style squarearrow}{}}%
+      {}]
+    {squarearrow}% #2
+    {\rotatebox{-90}{$\square$\,\ding{222}}}%
+    {\rotatebox{90}{$\square$\,\ding{222}}}%
+    {\rotatebox{-90}{$\blacksquare$\,\ding{222}}}%
+    {\rotatebox{90}{$\blacksquare$\,\ding{222}}}%
+
+%%% the command to print the labels text
+
+\newcommand\board@do@printlabelleftfield[1]{%rank
+ \begingroup
+  \setcounter{ranklabel}{#1}%
+  \raisebox{\board@val@labelleftlift}[\len@cfss@squaretotalheight][0pt]{%
+    \makebox[0pt][r]{%
+     \makebox[\board@val@labelleftwidth][l]{%
+       \cfss@sidefont
+       \board@val@labelleftfont
+       \selectfont
+       \board@val@labelleftformat}}}%
+ \endgroup}%
+
+\newcommand\board@do@printlabelrightfield[1]{%rank
+ \begingroup
+  \setcounter{ranklabel}{#1}%
+  \raisebox{\board@val@labelrightlift}[\len@cfss@squaretotalheight][0pt]{%
+    \makebox[0pt][l]{%
+     \makebox[\board@val@labelrightwidth][r]{%
+      \cfss@sidefont
+      \board@val@labelrightfont
+      \selectfont
+      \board@val@labelrightformat}}}%
+ \endgroup}%
+
+\newcommand\board@do@printlabelbottomfield{%
+  \raisebox{-\board@val@labelbottomlift}[0pt][0pt]{\makebox[\len@cfss@squarewidth][c]{\board@val@labelbottomformat}}}%
+
+\newcommand\board@do@printlabeltopfield{%
+  \raisebox{\dimexpr\len@cfss@squaretotalheight+\board@val@labeltoplift\relax}[0pt][0pt]%
+   {\makebox[\len@cfss@squarewidth][c]{\board@val@labeltopformat}}}%
+
+\newcommand\board@do@printlabelbottom[2]{%#1 firstfile, #2 lastfile
+  \begingroup
+  \cfss@sidefont
+  \board@val@labelbottomfont
+  \selectfont
+  \makebox[0pt][r]{%
+    \setcounter{cnt@board@file}{#1}%
+    \whiledo%
+      {\board@print@sign\value{cnt@board@file}<\board@print@sign#2
+       \OR
+       \value{cnt@board@file}=#2}%
+      {\setcounter{filelabel}{\value{cnt@board@file}}%
+       \board@do@printlabelbottomfield%
+       \addtocounter{cnt@board@file}{\board@print@sign1}}}%
+  \endgroup}%
+
+\newcommand\board@do@printlabeltop[2]{%#1 firstfile, #2 lastfile
+  \begingroup
+  \cfss@sidefont
+  \board@val@labeltopfont
+  \selectfont
+  \makebox[0pt][l]{%
+    \setcounter{cnt@board@file}{#1}%
+    \whiledo%
+     {\board@print@sign\value{cnt@board@file}<\board@print@sign#2
+      \OR
+      \value{cnt@board@file}=#2}%
+     {\setcounter{filelabel}{\value{cnt@board@file}}%
+      \board@do@printlabeltopfield%
+      \addtocounter{cnt@board@file}{\board@print@sign1}}}%
+  \endgroup}%
+
+%%%%%
+%% highlighting
+
+%%% emphasize piece
+
+\newcommand\board@do@store@pieceemph[2]{%#1filenum, #2ranknum
+  \@ifundefined{board@val@pieceemph}%
+    {\def\board@val@pieceemph{}}%
+    {}%
+  \toks@=\expandafter{\board@val@pieceemph}%
+  \ifUFCB@locfill@coloremph
+    \@temptokena=\expandafter{\board@val@fontcolorstack}%
+  \board@enamedef{%
+     board@val@f#1r#2@emph}{%
+      \the\toks@\the\@temptokena}%
+  \else
+   \board@enamedef{%
+     board@val@f#1r#2@emph}{%
+     \the\toks@}%
+   \fi}%
+
+\newcommand\board@do@empharea[1]{%
+ \expandafter\board@split@areasort#1ARGEND%
+ %% initialisation
+ \setcounter{cnt@board@file}{\board@temp@curstartfilenum}%
+ \setcounter{cnt@board@rank}{\board@temp@curstartranknum}%
+ %
+ \whiledo
+  {\value{cnt@board@rank}>\numexpr \board@temp@curstopranknum-1\relax}%
+  {\setcounter{cnt@board@file}{\board@temp@curstartfilenum}%
+   \whiledo
+    {\value{cnt@board@file}<\numexpr \board@temp@curstopfilenum+1\relax}%
+    {\board@do@store@pieceemph{\number\value{cnt@board@file}}{\number\value{cnt@board@rank}}%
+     \addtocounter{cnt@board@file}{1}}%
+   \addtocounter{cnt@board@rank}{-1}}}%
+
+%%% border of board
+
+\newcommand\board@print@border{%
+  \raisebox{0pt}[0pt][0pt]{%
+   \makebox[0pt][r]{%bottom
+    \board@val@borderbottomcolor
+    \rule[-\board@val@borderbottomwidth]%
+      {\dimexpr
+        \ifUFCB@locset@borderleft
+         \board@val@borderleftwidth +
+        \fi
+        \numexpr\board@val@stopprintfilenum-\board@val@startprintfilenum+1\relax\len@cfss@squarewidth
+        \ifUFCB@locset@borderright
+         +\board@val@borderrightwidth
+        \fi
+      \relax}%
+      {\ifUFCB@locset@borderbottom\board@val@borderbottomwidth\else0pt\fi}%
+    \ifUFCB@locset@borderright
+     \hspace*{-\board@val@borderrightwidth}%
+    \fi}%
+   \makebox[0pt][r]{%left
+    \board@val@borderleftcolor
+    \rule[\ifUFCB@locset@borderbottom-\board@val@borderbottomwidth\else0pt\fi]%
+      {\ifUFCB@locset@borderleft
+        \board@val@borderleftwidth
+       \else
+        0pt%
+       \fi}
+      {\dimexpr
+        \ifUFCB@locset@borderbottom\board@val@borderbottomwidth +\fi
+        \numexpr\board@val@startprintranknum-\board@val@stopprintranknum+1\relax\len@cfss@squaretotalheight
+        \ifUFCB@locset@bordertop
+         +\board@val@bordertopwidth
+        \fi
+       \relax}%
+     \hspace*{\numexpr\board@val@stopprintfilenum-\board@val@startprintfilenum+1\relax\len@cfss@squarewidth}%
+     }%
+     %%
+   \makebox[0pt][r]{%top
+    \board@val@bordertopcolor
+    \rule[\numexpr\board@val@startprintranknum-\board@val@stopprintranknum+1\relax\len@cfss@squaretotalheight]%
+      {\dimexpr
+        \ifUFCB@locset@borderleft
+         \board@val@borderleftwidth +
+        \fi
+        \numexpr\board@val@stopprintfilenum-\board@val@startprintfilenum+1\relax\len@cfss@squarewidth
+        \ifUFCB@locset@borderright
+         +\board@val@borderrightwidth
+        \fi
+      \relax}%
+      {\ifUFCB@locset@bordertop\board@val@bordertopwidth\else0pt\fi}%
+     \ifUFCB@locset@borderright
+      \hspace*{-\board@val@borderrightwidth}%
+     \fi}%
+     %%
+   \makebox[0pt][l]{%right
+     \board@val@borderrightcolor
+     \rule[\ifUFCB@locset@borderbottom-\board@val@borderbottomwidth\else0pt\fi]%
+      {\ifUFCB@locset@borderright
+        \board@val@borderrightwidth
+       \else
+        0pt%
+       \fi}%
+      {\dimexpr
+        \ifUFCB@locset@borderbottom\board@val@borderbottomwidth +\fi
+        \numexpr\board@val@startprintranknum-\board@val@stopprintranknum+1\relax\len@cfss@squaretotalheight
+        \ifUFCB@locset@bordertop
+         +\board@val@bordertopwidth
+        \fi
+       \relax}%
+     }}}
+
+\newcommand\board@do@setpsnode{%
+  \ifpdf\else
+   \ifUFCB@locset@psset
+    \ifUFCB@locset@inverse
+     \pnode(%
+      \dimexpr -1.5\len@cfss@squarewidth +
+       \board@val@startprintfilenum\len@cfss@squarewidth\relax,
+      \dimexpr
+       \board@val@startprintranknum\len@cfss@squaretotalheight
+        -7.5\len@cfss@squaretotalheight\relax){BM}
+    \else
+     \pnode(%
+      \dimexpr 7.5\len@cfss@squarewidth
+       -\board@val@stopprintfilenum\len@cfss@squarewidth\relax,
+      \dimexpr
+       -\board@val@stopprintranknum\len@cfss@squaretotalheight
+       +1.5\len@cfss@squaretotalheight\relax){BM}
+    \fi
+   \fi
+  \fi}
+
+%%%%%%%
+%% the main commands
+%%%%%%
+
+%%% The command that holds saved keys
+
+\def\board@val@savedkeylist{@null=@null}%
+
+\newcommand\storechessboardstyle[2]{%#1 name, #2 key-list
+    \@namedef{board@val@style#1keylist}{#2}}%
+
+\newcommand\setchessboard[1]{%changed 2007-07-03
+     \def\board@temp@keylist{}%
+     \setkeys[UFCB]{@start}{board@expand={#1}}%
+     \toks@=\expandafter{\board@temp@keylist}%
+     \edef\board@temp@command{%
+        \noexpand\setkeys*[UFCB]{gloinit}{\the\toks@}}%
+     \board@temp@command
+     \setrmkeys*[UFCB]{gloset}%
+     \setrmkeys[UFCB]{glofill}}%
+
+\newcommand\chessboard[1][]{%
+ \begingroup
+  \normallineskip=1pt\relax\normallineskiplimit=0pt\relax%14.3.2011
+  \savekeys[UFCB]{locset}{\global{psset},\global{psskak},\global{inverse}}%
+%%% Initialisation
+%% combine the the global keys and the keys in argument
+ \let\board@temp@keylist\board@val@savedkeylist
+ \setkeys[UFCB]{@start}{board@expand={#1}}%
+ \toks@=\expandafter{\board@temp@keylist}%
+ \edef\board@temp@command{%
+  \noexpand\setkeys*[UFCB]{locinit}{\the\toks@}}%
+ \board@temp@command
+ %\show\XKV@rm
+ \expandafter\board@do@showtypelist\expandafter{\csname board@\board@val@game @piececharlist\endcsname,empty}%
+%% fills the board with the current position
+%% getting the fen of the current position with the fencalculate command of the current game:
+  \csname board@\board@val@game @do@fencalculate\endcsname
+%% saving the current language
+  \let\board@val@savelang\board@val@curlang
+%% setting the fen of the current position and saving it
+  \board@do@setsinglekeys*[UFCB]{locfill}{%
+   language=english,
+   setfen=\board@val@fencalculate,
+   storefen=current,
+   language=\board@val@savelang}%
+   %\show\XKV@rm  %test
+%% setting the set keys
+  \setrmkeys*[UFCB]{locset}%
+  \edef\printarea{%
+   \board@val@startprintfilechar\board@val@startprintranknum-%
+   \board@val@stopprintfilechar\board@val@stopprintranknum}%
+  \edef\board{%
+   \board@val@maxfilechar\board@val@maxranknum-%
+   \board@val@minfilechar\board@val@minranknum}%
+  \ifUFCB@locset@inverse
+   \gdef\board@print@sign{-}%
+  \else
+   \gdef\board@print@sign{}%
+  \fi
+%% to get the size of the fields
+  \ifUFCB@locset@psset
+   \expandafter\board@do@globalgetsquaresize\expandafter{\board@val@game}%
+  \else
+   \expandafter\board@do@getsquaresize\expandafter{\board@val@game}%
+  \fi
+%% switch to board font an set ex and em
+  \cfss@boardfont
+  \fontdimen5\font=0.5\len@cfss@squarewidth
+  \fontdimen6\font=\len@cfss@squarewidth
+%% initialisation of the pgf-pictures with the anchor and shifts
+  \board@pgf@init
+  \board@do@getfieldcolorlists
+%% setting the fill keys
+   % \show\XKV@rm %test
+  \setrmkeys[UFCB]{locfill}%
+%%% starting to print
+  \ifUFCB@locinit@print
+%% setting the default font colors
+  \board@val@boardfontcolors
+%% the left margin
+   \ifUFCB@locset@marginleft
+    \makebox[\board@val@marginleftwidth]{}%
+   \fi
+%% the background picture
+   \ifUFCB@locset@pgf
+    \makebox[0pt]{%
+     \begin{pgfpicture}%
+      \board@pgf@background
+      \begin{pgfscope}%
+       \board@pgf@extrabackground
+      \end{pgfscope}%
+     \end{pgfpicture}}%
+   \fi
+%% the board
+   \ifUFCB@locset@inverse
+    \setcounter{cnt@board@rank}{\board@val@stopprintranknum}% inv.
+    \parbox[b]{\numexpr\board@val@stopprintfilenum-\board@val@startprintfilenum+1\relax\len@cfss@squarewidth}%
+     {\parindent0pt\relax\baselineskip=\len@cfss@squaretotalheight\relax%
+      \nointerlineskip
+%% top margin
+      \ifUFCB@locset@margintop
+       \rule{0pt}{\dimexpr\len@cfss@squaretotalheight+\board@val@margintopwidth\relax}%
+      \fi
+      \ifUFCB@locset@labeltop
+       \board@do@printlabeltop{\board@val@stopprintfilenum}{\board@val@startprintfilenum}%
+      \fi
+%% the pieces and side labels
+      \whiledo
+       {\value{cnt@board@rank}<\numexpr\board@val@startprintranknum+1\relax}% inv
+       {\board@do@printrank%
+         {\number\value{cnt@board@rank}}%
+         {\board@val@stopprintfilenum}%
+         {\board@val@startprintfilenum}%
+        \hspace{0pt}%
+        \addtocounter{cnt@board@rank}{1}}%inv
+%% bottom label
+      \ifUFCB@locset@labelbottom
+       \board@do@printlabelbottom{\board@val@stopprintfilenum}{\board@val@startprintfilenum}%
+      \fi}% end parbox
+   \else %not inverse
+    \setcounter{cnt@board@rank}{\board@val@startprintranknum}%
+    \parbox[b]{\numexpr\board@val@stopprintfilenum-\board@val@startprintfilenum+1\relax\len@cfss@squarewidth}%
+     {\parindent0pt\relax\baselineskip=\len@cfss@squaretotalheight\relax%
+      \nointerlineskip
+%% top margin
+      \ifUFCB@locset@margintop
+       \rule{0pt}{\dimexpr\len@cfss@squaretotalheight+\board@val@margintopwidth\relax}%
+      \fi
+      \ifUFCB@locset@labeltop
+       \board@do@printlabeltop{\board@val@startprintfilenum}{\board@val@stopprintfilenum}%
+      \fi
+%% the pieces and side labels
+      \whiledo
+       {\value{cnt@board@rank}>\numexpr\board@val@stopprintranknum-1\relax}%
+       {\board@do@printrank%
+         {\number\value{cnt@board@rank}}%
+         {\board@val@startprintfilenum}%
+         {\board@val@stopprintfilenum}%
+        \hspace{0pt}%
+        \addtocounter{cnt@board@rank}{-1}}%
+%% bottom label
+      \ifUFCB@locset@labelbottom
+       \board@do@printlabelbottom{\board@val@startprintfilenum}{\board@val@stopprintfilenum}%
+      \fi}% end second parbox
+   \fi %end if inverse
+%%the markground picture
+   \ifUFCB@locset@pgf
+    \makebox[0pt]{%
+     \begin{pgfpicture}%
+      \board@pgf@markground
+      \begin{pgfscope}%
+       \csname board@pgf@extramarkground\endcsname
+      \end{pgfscope}%
+     \end{pgfpicture}}%
+   \fi % end pgf
+     \board@do@setpsnode
+ %%
+ % Border
+ %%%
+   \board@print@border
+ %% Mover
+   \ifUFCB@locset@showmover
+    \ifcsname board@val@moverstyle@\board@val@moverstyle\endcsname
+     \csname board@val@moverstyle@\board@val@moverstyle\endcsname
+    \else
+     \PackageWarning{chessboard}%
+      {Moverstyle '\board@val@moverstyle'  is not defined, I will use
+       type square instead}%
+     \board@val@moverstyle@square
+    \fi
+    \board@do@printbottommover%
+    \board@do@printtopmover
+   \fi
+ %%
+   \ifUFCB@locset@marginbottom
+    \rule[-\board@val@marginbottomwidth]{0pt}{\board@val@marginbottomwidth}% bottom margin
+   \fi
+   \ifUFCB@locset@marginright
+    \makebox[\board@val@marginrightwidth]{}%right margin
+   \fi
+  \fi %end if print
+ \endgroup%% Attention! Keys after the group must be global!
+ \ifpdf
+ \else
+  \ifthenelse%
+   {\boolean{\XKV@UFCB@locset@psset@value}}%
+   {\psset{xunit=\len@cfss@squarewidth,yunit=\len@cfss@squaretotalheight}}%
+   {}%
+  \ifthenelse%
+   {\boolean{\XKV@UFCB@locset@psskak@value}}%
+   {\let\set@special@psmarkers\board@skak@set@special@psmarkers%
+    \@ifundefined{theps@inverse}{}{%
+     \ifthenelse%
+      {\boolean{\XKV@UFCB@locset@inverse@value}}%
+      {\setcounter{ps@inverse}{180}}%
+      {\setcounter{ps@inverse}{0}}}}%
+   {}%
+ \fi %end ifpdf
+ }% end chessboard
+
+%%% Changing the  input language
+
+\newcommand\cbDefineLanguage[1]{%
+  \ifcsname board@val@lang#1\endcsname
+   \PackageWarning{chessboard}%
+     {Language #1 already defined}%
+  \else
+   \global\@namedef{board@val@lang#1}{}%
+   \global\@namedef{board@val@lang#1@empty}{empty}%
+  \fi}%
+
+\newcommand\cbDefineTranslation[3]{%#1 language, #2 english, #3 translation
+    \global\@namedef{board@val@lang#1@#3}{#2}}%
+
+\cbDefineLanguage{german}%
+\cbDefineTranslation{german}{K}{K}%
+\cbDefineTranslation{german}{Q}{D}%
+\cbDefineTranslation{german}{R}{T}%
+\cbDefineTranslation{german}{B}{L}%
+\cbDefineTranslation{german}{N}{S}%
+\cbDefineTranslation{german}{P}{B}%
+\cbDefineTranslation{german}{k}{k}%
+\cbDefineTranslation{german}{q}{d}%
+\cbDefineTranslation{german}{r}{t}%
+\cbDefineTranslation{german}{b}{l}%
+\cbDefineTranslation{german}{n}{s}%
+\cbDefineTranslation{german}{p}{b}%
+
+\cbDefineLanguage{english}%
+\cbDefineTranslation{english}{K}{K}%
+\cbDefineTranslation{english}{Q}{Q}%
+\cbDefineTranslation{english}{R}{R}%
+\cbDefineTranslation{english}{B}{B}%
+\cbDefineTranslation{english}{N}{N}%
+\cbDefineTranslation{english}{P}{P}%
+\cbDefineTranslation{english}{k}{k}%
+\cbDefineTranslation{english}{q}{q}%
+\cbDefineTranslation{english}{r}{r}%
+\cbDefineTranslation{english}{b}{b}%
+\cbDefineTranslation{english}{n}{n}%
+\cbDefineTranslation{english}{p}{p}%
+
+%%% command to add pieces to the list
+
+\newcommand\board@add@chartocolorpiececharlist[3]{% #1 game, #2 color, #3 char
+ \ifcsname board@#1@#2piececharlist\endcsname
+  \ifthenelse%
+   {\equal{\csname board@#1@#2piececharlist\endcsname}{}}
+   {\@namedef{board@#1@#2piececharlist}{#3}}
+   {\expandafter\g@addto@macro\csname board@#1@#2piececharlist\endcsname{,#3}}%
+ \else
+   \@namedef{board@#1@piececharlist}{#3}%
+ \fi}%
+
+\newcommand\board@add@chartopiececharlist[2]{% #1 game, #2 char
+ \ifcsname board@#1@piececharlist\endcsname
+  \ifthenelse%
+   {\equal{\csname board@#1@piececharlist\endcsname}{}}%
+   {\@namedef{board@#1@piececharlist}{#2}}%
+   {\expandafter\g@addto@macro\csname board@#1@piececharlist\endcsname{,#2}}%
+ \else
+   \@namedef{board@#1@piececharlist}{#2}%
+ \fi}%
+
+%%% Adding new pieces
+\newcommand\cbDefineNewPiece[5][skak]{%#1=optional=game, #2=color, #3=char, #4=on white, #5=on black
+ \ifcsname board@#1@piece@#3@white\endcsname
+  \PackageError{chessboard}{Piece #3 already defined!}{}%
+ \else
+  \board@add@chartocolorpiececharlist{#1}{#2}{#3}%
+  \board@add@chartopiececharlist{#1}{#3}%
+  \expandafter\gdef\csname board@#1@piece@#3@white\endcsname{#4}%
+  \expandafter\gdef\csname board@#1@piece@#3@black\endcsname{#5}%
+  \cbDefineTranslation{english}{#3}{#3}%
+ \fi}%
+
+%%% Adding new pieces
+\newcommand\cbReDefineNewPiece[5][skak]{%#1=optional=game, #2=color, #3=char, #4=on white, #5=on black
+ \ifcsname board@#1@piece@#3@white\endcsname
+ \else
+   \PackageWarning{chessboard}{Piece #3 not yet defined! I will define it now}{}%
+ \fi
+ \board@add@chartocolorpiececharlist{#1}{#2}{#3}%
+ \board@add@chartopiececharlist{#1}{#3}%
+ \expandafter\gdef\csname board@#1@piece@#3@white\endcsname{#4}%
+ \expandafter\gdef\csname board@#1@piece@#3@black\endcsname{#5}%
+ \cbDefineTranslation{english}{#3}{#3}}%
+
+%%% Initialization the piece commands.
+%% game: skak
+
+\newcommand\board@skak@piece@empty@white{\cfss@WhiteEmptySquare}%
+\newcommand\board@skak@piece@empty@black{\cfss@BlackEmptySquare}%
+\newcommand\board@skak@piece@K@white{\cfss@WhiteKingOnWhite}%
+\newcommand\board@skak@piece@K@black{\cfss@WhiteKingOnBlack}%
+\newcommand\board@skak@piece@k@white{\cfss@BlackKingOnWhite}%
+\newcommand\board@skak@piece@k@black{\cfss@BlackKingOnBlack}%
+\newcommand\board@skak@piece@Q@white{\cfss@WhiteQueenOnWhite}%
+\newcommand\board@skak@piece@Q@black{\cfss@WhiteQueenOnBlack}%
+\newcommand\board@skak@piece@q@white{\cfss@BlackQueenOnWhite}%
+\newcommand\board@skak@piece@q@black{\cfss@BlackQueenOnBlack}%
+\newcommand\board@skak@piece@R@white{\cfss@WhiteRookOnWhite}%
+\newcommand\board@skak@piece@R@black{\cfss@WhiteRookOnBlack}%
+\newcommand\board@skak@piece@r@white{\cfss@BlackRookOnWhite}%
+\newcommand\board@skak@piece@r@black{\cfss@BlackRookOnBlack}%
+\newcommand\board@skak@piece@B@white{\cfss@WhiteBishopOnWhite}%
+\newcommand\board@skak@piece@B@black{\cfss@WhiteBishopOnBlack}%
+\newcommand\board@skak@piece@b@white{\cfss@BlackBishopOnWhite}%
+\newcommand\board@skak@piece@b@black{\cfss@BlackBishopOnBlack}%
+\newcommand\board@skak@piece@N@white{\cfss@WhiteKnightOnWhite}%
+\newcommand\board@skak@piece@N@black{\cfss@WhiteKnightOnBlack}%
+\newcommand\board@skak@piece@n@white{\cfss@BlackKnightOnWhite}%
+\newcommand\board@skak@piece@n@black{\cfss@BlackKnightOnBlack}%
+\newcommand\board@skak@piece@P@white{\cfss@WhitePawnOnWhite}%
+\newcommand\board@skak@piece@P@black{\cfss@WhitePawnOnBlack}%
+\newcommand\board@skak@piece@p@white{\cfss@BlackPawnOnWhite}%
+\newcommand\board@skak@piece@p@black{\cfss@BlackPawnOnBlack}%
+
+\newcommand\board@skak@refpiece{%
+ \begingroup
+  \fontsize{\cfss@boardfontsize}{\cfss@boardfontsize}%
+  \BlackEmptySquare
+ \endgroup}%
+
+\newcommand\board@skak@piececharlist{K,Q,R,B,N,P,k,q,r,b,n,p}%
+\newcommand\board@skak@whitepiececharlist{K,Q,R,B,N,P}%
+\newcommand\board@skak@blackpiececharlist{k,q,r,b,n,p}%
+
+\AtBeginDocument{%
+ \@ifpackageloaded{skak}%
+   {\def\board@skak@do@fencalculate{%
+     \Fen@calculate
+     \let\board@val@fencalculate\temp@board}%
+    \def\board@skak@set@special@psmarkers#1#2{%
+     \get@translation#1%
+     \setcounter{fileFrom}{\value{fileTo}}%
+     \setcounter{rankFrom}{\value{rankTo}}%
+     \get@translation#2%
+     \rput(BM){\pnode(-\arabic{fileFrom},\arabic{rankFrom}){From}}%
+     \rput(BM){\pnode(-\arabic{fileTo},\arabic{rankTo}){To}}}}%
+   {\def\board@skak@do@fencalculate{%
+     \def\board@val@fencalculate{8/8/8/8/8/8/8/8}}}}%
+
+%%% Initialization keys
+
+\setkeys*[UFCB]{gloinit}{print,
+                        game=skak,
+                        maxfield=h8,
+                        zero=false,
+                        moverdefault=W,
+                        castlingdefault=KQkq,
+                        enpassantdefault=-,
+                        halfmovedefault=0,
+                        fullmovedefault=1}%
+
+\setkeys*[UFCB]{gloset}{normalboard,
+                       inverse=false,
+                       startprint=\board@val@minfilechar\board@val@maxranknum,
+                       stopprint=\board@val@maxfilechar\board@val@minranknum,
+                       padding=0pt,
+                       psset=false,
+                       psskak=false,
+                       pgf,
+                       %labels
+                       labelleft,labelbottom,
+                       labelfont={}, %defaults from chessfss used
+                       hlabelformat=\arabic{ranklabel},
+                       vlabelformat=\alph{filelabel},
+                       hlabellift=0.35em,
+                       hlabelwidth=1ex,
+                       labelbottomlift=1.1\baselineskip,
+                       labeltoplift=0.2\baselineskip,
+                       %margin
+                       margin,
+                       marginwidth=1em,
+                       border,
+                       borderwidth=0.04em,
+                       bordercolor=black,
+                       %mover
+                       showmover,
+                       moversize=1em,%0.5\len@cfss@squaretotalheight,
+                       moverstyle=square,
+                       moverlift=0pt,
+                       movershift=1ex,
+                       }%
+
+\def\board@pgf@linewidth{0.1em}
+\def\board@pgf@arrow{latex}
+\def\board@pgf@colorbackpadding{0pt}
+\def\board@val@boardfontcolors{}
+\def\board@val@fontcolorstack{}
+\def\board@pgf@corner{0pt}
+\def\board@pgf@shortenstart{0pt}
+\def\board@pgf@shortenend{0pt}
+\def\board@pgf@padding{0pt}
+\setkeys[UFCB]{bez}{x1=1/3,x2=2/3,y1=1,y2=1,clockwise}
+\def\currentfontcolors{\board@val@fontcolorstack}
+\setkeys*[UFCB]{glofill}{language=english,trimtocolor=false,trimarea=\board,trim,usepgf=all,pgfstyle=none}%
+\board@do@setsinglekeys*[UFCB]{locfill}{language=english}%
+
+%</chessboard>
+%<*chessboard-pgf>
+\ProvidesFile{chessboard-pgf.sty}[2019/06/23 version v1.8 pgf code for chessboard.sty]
+%%$Date: 2011/01/11 14:07:20 $$Version: 3d9f59c743f1 $
+
+\newcommand\board@pgf@extrabackground{}%
+\newcommand\board@pgf@extramarkground{}%
+
+\newcommand\board@pgf@addbackground[1]{%#1 commands,
+   \expandafter\board@do@l@addto@macro\csname board@pgf@extrabackground\endcsname{#1}}%
+
+\newcommand\board@pgf@addmarkground[1]{%#1 commands
+   \expandafter\board@do@l@addto@macro\csname board@pgf@extramarkground\endcsname{#1}}%
+
+%% saving the markstyles with option
+
+\newcommand\board@do@savemarkstyle{%
+    \@ifnextchar[\board@do@savemarkstylewithopt\board@do@savemarkstylenoopt}%
+
+\def\board@do@savemarkstylewithopt[#1]#2ARGEND{%
+  \def\board@pgf@curstyleopt{#1}%
+  \def\board@pgf@curmarkstyle{#2}%added 2007.08.15
+  \board@pgf@addmarkground{%
+    \def\board@pgf@curmarkstyle{#2}%
+    \def\board@pgf@curstyleopt{#1}}}%
+
+\def\board@do@savemarkstylenoopt#1ARGEND{%
+  \def\board@pgf@curstyleopt{}%added 2007.08.15
+  \def\board@pgf@curmarkstyle{#1}%
+  \board@pgf@addmarkground{%
+   \def\board@pgf@curstyleopt{}%
+   \def\board@pgf@curmarkstyle{#1}}}%
+
+%% saving the backstyle with option
+\newcommand\board@do@savebackstyle{%
+    \@ifnextchar[\board@do@savebackstylewithopt\board@do@savebackstylenoopt}%
+
+\def\board@do@savebackstylewithopt[#1]#2ARGEND{%
+  \def\board@pgf@curstyleopt{#1}%
+  \board@pgf@addbackground{%
+    \def\board@pgf@curbackstyle{#2}%
+    \def\board@pgf@curstyleopt{#1}}}%
+
+\def\board@do@savebackstylenoopt#1ARGEND{%
+  \def\board@pgf@curbackstyle{#1}%
+  \board@pgf@addbackground{%
+   \def\board@pgf@curstyleopt{}%
+   \def\board@pgf@curbackstyle{#1}}}%
+
+%% init/start pgf commands
+
+\newcommand\board@pgf@clippath{}%
+
+\newcommand\board@pgf@setunits{%
+   \pgfsetxvec{\pgfpoint{\len@cfss@squarewidth}{0cm}}%
+   \pgfsetyvec{\pgfpoint{0cm}{\len@cfss@squaretotalheight}}%
+   \pgfpathrectangle{\pgfpointorigin}{\pgfpointorigin}%
+   \pgfusepath{use as bounding box}}%
+
+\newcommand\board@pgf@addnode[2]{%#1= node name =field name, #2=mark or back
+ \expandafter\board@do@l@addto@macro\csname board@pgf@#2ground\endcsname{%
+   \pgfnode{coordinate}{center}{}{#1}{}{}%
+   \pgfusepath{fill}}}%
+
+\newcommand\board@pgf@gotonode[2]{% #1= node name =field name #2=mark or back
+ \expandafter\board@do@l@addto@macro\csname board@pgf@#2ground\endcsname{%
+  \pgftransformshift{\pgfpointanchor{#1}{center}}}}%
+
+\newcommand\board@pgf@setanchors[1]{% #1= mark or back
+ \setcounter{cnt@board@rank}{0}%
+ \setcounter{cnt@board@file}{0}%
+ \whiledo %nodes for files
+  {\value{cnt@board@file}<\numexpr\board@val@maxfilenum+1\relax}%
+  {\setcounter{cnt@board@rank}{0}%
+   \whiledo %nodes for on one field for each rank
+    {\value{cnt@board@rank}<\numexpr\board@val@maxranknum+1\relax}%
+    {\edef\board@temp{\zeroalph{cnt@board@file}\arabic{cnt@board@rank}}%
+     \expandafter\board@pgf@addnode\expandafter{\board@temp}{#1}%
+     \expandafter\board@do@l@addto@macro\csname board@pgf@#1ground\endcsname{%
+       \pgftransformshift{\pgfpointxy{0}{1}}}%
+     \addtocounter{cnt@board@rank}{1}}%
+   \edef\board@temp{\zeroalph{cnt@board@file}0}%
+   \expandafter\board@pgf@gotonode\expandafter{\board@temp}{#1}%
+   \addtocounter{cnt@board@file}{1}%
+  \expandafter\board@do@l@addto@macro\csname board@pgf@#1ground\endcsname{% one to the right
+    \pgftransformshift{\pgfpointxy{1}{0}}}}%
+  \expandafter\board@do@l@addto@macro\csname board@pgf@#1ground\endcsname{%
+    \csname board@pgf@#1clippath\endcsname}}%
+
+\newcommand\board@pgf@init{%
+  \def\board@pgf@background{%
+   \board@pgf@setunits
+   \ifUFCB@locset@inverse
+    \pgftransformshift{\pgfpointxy{\board@val@stopprintfilenum}{\board@val@startprintranknum}}%
+    \pgftransformshift{\pgfpointxy{0.5}{0.5}}%
+    \pgftransformrotate{180}%
+   \else
+    \pgftransformshift{\pgfpointxy{-\board@val@startprintfilenum}{-\board@val@stopprintranknum}}%
+    \pgftransformshift{\pgfpointxy{0.5}{0.5}}%
+   \fi}%
+   \board@pgf@setanchors{back}%
+  %
+  \def\board@pgf@markground{%
+   \board@pgf@setunits
+   \ifUFCB@locset@inverse
+    \pgftransformshift{\pgfpointxy{\board@val@startprintfilenum}{\board@val@startprintranknum}}%
+    \pgftransformshift{\pgfpointxy{-0.5}{0.5}}%
+    \pgftransformrotate{180}%
+   \else
+    \pgftransformshift{\pgfpointxy{-\board@val@stopprintfilenum}{-\board@val@stopprintranknum}}%
+    \pgftransformshift{\pgfpointxy{-0.5}{0.5}}%
+   \fi}%
+   \board@pgf@setanchors{mark}}%
+
+%% getting angles/length of a point:
+
+\newcommand\board@pgf@extractangle[2]{%#1 command, #2 pgfpoint
+   \pgfextracty{\len@board@tempy}{#2}%
+   \pgfextractx{\len@board@tempx}{#2}%
+  \ifdim\len@board@tempx=0pt\relax
+  %\len@board@tempy= 1 or unchanged?
+  \else
+   \divide \len@board@tempy by \strip@pt\len@board@tempx\relax
+  \fi
+   \ifdim\len@board@tempx=0pt\relax
+     \ifdim\len@board@tempy=0pt\relax
+      \def#1{0}%
+     \else
+      \ifdim\len@board@tempy>0pt\relax
+       \def#1{90}%
+      \else
+       \def#1{-90}%
+      \fi
+     \fi
+   \fi
+   \ifdim\len@board@tempy=0pt\relax
+    \ifdim\len@board@tempx=0pt\relax
+      \def#1{0}%
+    \else
+      \ifdim\len@board@tempx>0pt\relax
+       \def#1{0}%
+      \else
+       \def#1{180}%
+      \fi
+    \fi
+   \fi
+   \ifdim\len@board@tempx>0pt\relax
+    \ifdim\len@board@tempy>0pt\relax
+     \pgfmathatan{\len@board@tempy}%
+     \edef#1{\pgfmathresult}%
+    \fi
+    \ifdim\len@board@tempy<0pt\relax
+     \pgfmathatan{\len@board@tempy}%
+     \edef#1{\pgfmathresult}%
+    \fi
+  \fi
+  \ifdim\len@board@tempx<0pt\relax
+    \ifdim\len@board@tempy>0pt\relax
+     \pgfmathatan{-\len@board@tempy}%
+     \pgfmathadd{-\pgfmathresult}{180}%
+     \edef#1{\pgfmathresult}%
+    \fi
+    \ifdim\len@board@tempy<0pt\relax
+     \pgfmathatan{\len@board@tempy}%
+     \pgfmathadd{\pgfmathresult}{180}%
+     \edef#1{\pgfmathresult}%
+    \fi
+  \fi
+   }
+
+
+\newcommand\board@pgf@extractlength[2]{%#1 length, #2 pgfpoint
+   \pgfextracty{\len@board@tempy}{#2}%
+   \pgfextractx{\len@board@tempx}{#2}%
+   \pgfmathveclen{\len@board@tempx}{\len@board@tempy}%
+   #1=\pgfmathresult pt\relax}
+
+
+%% Field decoration:
+%%  The command called by the markarea-key
+
+\newcommand*\board@pgf@add@fieldmarkstyletoarea[1]{% #1 =area
+ \expandafter\board@split@areasort#1ARGEND%
+ %% initialisation
+ \setcounter{cnt@board@file}{\board@temp@curstartfilenum}%
+ \setcounter{cnt@board@rank}{\board@temp@curstartranknum}%
+ %
+ \whiledo
+  {\value{cnt@board@rank}>\numexpr \board@temp@curstopranknum-1\relax}%
+  {\setcounter{cnt@board@file}{\board@temp@curstartfilenum}%
+   \whiledo
+    {\value{cnt@board@file}<\numexpr \board@temp@curstopfilenum+1\relax}%
+    {\edef\board@temp@curfield{\zeroalph{cnt@board@file}\arabic{cnt@board@rank}}%
+     \expandafter\board@pgf@addpgftofield\expandafter{\board@temp@curfield}{mark}%
+     \addtocounter{cnt@board@file}{1}}%
+   \addtocounter{cnt@board@rank}{-1}}}%
+
+%% The command called by the backarea-key
+
+\newcommand*\board@pgf@add@fieldbackstyletoarea[1]{% #1 =area
+ \expandafter\board@split@areasort#1ARGEND%
+ %% initialisation
+ \setcounter{cnt@board@file}{\board@temp@curstartfilenum}%
+ \setcounter{cnt@board@rank}{\board@temp@curstartranknum}%
+ %
+ \whiledo
+  {\value{cnt@board@rank}>\numexpr \board@temp@curstopranknum-1\relax}%
+  {\setcounter{cnt@board@file}{\board@temp@curstartfilenum}%
+   \whiledo
+    {\value{cnt@board@file}<\numexpr \board@temp@curstopfilenum+1\relax}%
+    {\edef\board@temp@curfield{\zeroalph{cnt@board@file}\arabic{cnt@board@rank}}%
+     \expandafter\board@pgf@addpgftofield\expandafter{\board@temp@curfield}{back}%
+     \addtocounter{cnt@board@file}{1}}%
+   \addtocounter{cnt@board@rank}{-1}}}%
+
+%% The command that puts the code in the picture.
+\newcommand\board@pgf@addpgftofield[2]{%  #1= node name =field name, #2=mark or back
+ \expandafter\board@split@field #1ARGEND%
+ \ifthenelse%
+  {\board@test@isfieldintrimarea{\board@temp@curfilenum}{\board@temp@curranknum}\AND
+   \board@test@isonactivecolor{\board@temp@curfilenum}{\board@temp@curranknum}}%
+  {\ifcsname board@pgf@fieldstyle\csname board@pgf@cur#2style\endcsname\endcsname
+    \csname board@pgf@add#2ground\endcsname{%
+    \def\currentarea{#1}%
+    \def\currentbq{#1}%
+    \def\currentbk{#1}%
+    \def\currentwq{#1}%
+    \def\currentwk{#1}%
+    \def\currentfrom{#1}%
+    \def\currentto{#1}%
+     \pgftransformshift{\pgfpointanchor{#1}{center}}%
+     \expandafter\let\expandafter\board@pgf@curpgfstyle
+       \csname board@pgf@fieldstyle\csname board@pgf@cur#2style\endcsname\endcsname
+     \edef\next{\noexpand\board@pgf@curpgfstyle
+          {#1}%
+          {\unexpanded\expandafter{\board@pgf@curstyleopt}}}%
+     \next}%
+  \else
+   \PackageWarning{chessboard}%
+     {#2 style '\csname board@pgf@cur#2style\endcsname'  not defined for fields!
+      I will ignore the #2 commands}%
+  \fi}%
+  {}}%
+
+%% Region decoration
+
+
+\def\board@pgf@backclipleftpadding{0pt}
+\def\board@pgf@backcliptoppadding{0pt}
+\def\board@pgf@backcliprightpadding{0pt}
+\def\board@pgf@backclipbottompadding{0pt}
+\def\board@pgf@markclipleftpadding{0pt}
+\def\board@pgf@markcliptoppadding{0pt}
+\def\board@pgf@markcliprightpadding{0pt}
+\def\board@pgf@markclipbottompadding{0pt}
+\def\board@pgf@usebackclippath{discard}
+\def\board@pgf@usemarkclippath{discard}
+
+\def\board@pgf@markclippath{%
+   \pgfusepath{}%
+   \pgfpathrectanglecorners%
+    {\pgfpointadd%
+      {\pgfpointanchor{\board@val@stopprintfilechar\board@val@startprintranknum}{center}}%
+      {\pgfpointadd
+        {\pgfpointxy{0.5}{0.5}}%
+        {\pgfpoint{\board@pgf@markcliprightpadding}{\board@pgf@markcliptoppadding}}%
+      }}%
+    {\pgfpointadd%
+      {\pgfpointanchor{\board@val@startprintfilechar\board@val@stopprintranknum}{center}}%
+      {\pgfpointadd
+        {\pgfpointxy{-0.5}{-0.5}}
+        {\pgfpoint{-\board@pgf@markclipleftpadding}{-\board@pgf@markclipbottompadding}}%
+      }%
+    }%
+   \pgfusepath{\board@pgf@usemarkclippath}}
+
+\def\board@pgf@backclippath{%
+   \pgfusepath{}%
+   \pgfpathrectanglecorners%
+    {\pgfpointadd%
+      {\pgfpointanchor{\board@val@stopprintfilechar\board@val@startprintranknum}{center}}%
+      {\pgfpointadd
+        {\pgfpointxy{0.5}{0.5}}%
+        {\pgfpoint{\board@pgf@backcliprightpadding}{\board@pgf@backcliptoppadding}}%
+      }}%
+    {\pgfpointadd%
+      {\pgfpointanchor{\board@val@startprintfilechar\board@val@stopprintranknum}{center}}%
+      {\pgfpointadd
+        {\pgfpointxy{-0.5}{-0.5}}
+        {\pgfpoint{-\board@pgf@backclipleftpadding}{-\board@pgf@backclipbottompadding}}%
+      }%
+    }%
+   \pgfusepath{\board@pgf@usebackclippath}}
+
+%% the command called by the markregion key
+%% the command puts the code directly in the pgf as no loop needed
+
+\newcommand\board@pgf@add@regionmarkstyle[2]{% #1=startfield (e.g. a8), #2=stopfield (e.g.h1)
+ \expandafter\board@split@areasort#1-#2ARGEND%
+ \ifthenelse%
+  {\board@test@isareaintrimarea
+   {\board@temp@curstartfilenum}{\board@temp@curstartranknum}%
+   {\board@temp@curstopfilenum}{\board@temp@curstopranknum}}%
+  {\ifcsname board@pgf@regionstyle\board@pgf@curmarkstyle\endcsname
+    \board@pgf@addmarkground{%
+    \def\currentarea{#1-#2}%
+    \expandafter\board@split@areasort#1-#2ARGEND%
+    \edef\currentbq{\board@temp@curstartfilechar\board@temp@curstartranknum}%
+    \edef\currentbk{\board@temp@curstopfilechar\board@temp@curstartranknum}%
+    \edef\currentwq{\board@temp@curstartfilechar\board@temp@curstopranknum}%
+    \edef\currentwk{\board@temp@curstopfilechar\board@temp@curstopranknum}%
+    \def\currentfrom{#1}%
+    \def\currentto{#2}%
+    \pgftransformshift{\pgfpointanchor{#1}{center}}%
+    \expandafter\let\expandafter\board@pgf@curpgfstyle
+       \csname board@pgf@regionstyle\csname board@pgf@curmarkstyle\endcsname\endcsname
+    \edef\next{\noexpand\board@pgf@curpgfstyle
+          {#2}%
+          {\unexpanded\expandafter{\board@pgf@curstyleopt}}}%
+    \next
+    %\csname board@pgf@regionstyle\board@pgf@curmarkstyle\endcsname{#2}%
+    }%
+  \else
+   \PackageWarning{chessboard}%
+     {mark style '\board@pgf@curmarkstyle'  not defined for regions!
+      I will ignore the mark commands}%
+  \fi}{}}%
+
+%% the command called by the backregion key
+%% the command puts the code directly in the pgf as no loop needed
+
+\newcommand\board@pgf@add@regionbackstyle[2]{% #1=startfield (e.g. a8), #2=stopfield (e.g.h1)
+ \expandafter\board@split@areasort#1-#2ARGEND%
+ \ifthenelse%
+  {\board@test@isareaintrimarea
+   {\board@temp@curstartfilenum}{\board@temp@curstartranknum}%
+   {\board@temp@curstopfilenum}{\board@temp@curstopranknum}}%
+  {\ifcsname board@pgf@regionstyle\board@pgf@curbackstyle\endcsname
+   \board@pgf@addbackground{%
+    \def\currentarea{#1-#2}%
+    \expandafter\board@split@areasort#1-#2ARGEND%
+    \edef\currentbq{\board@temp@curstartfilechar\board@temp@curstartranknum}%
+    \edef\currentbk{\board@temp@curstopfilechar\board@temp@curstartranknum}%
+    \edef\currentwq{\board@temp@curstartfilechar\board@temp@curstopranknum}%
+    \edef\currentwk{\board@temp@curstopfilechar\board@temp@curstopranknum}%
+    \def\currentfrom{#1}%
+    \def\currentto{#2}%
+    \pgftransformshift{\pgfpointanchor{#1}{center}}%
+    \expandafter\let\expandafter\board@pgf@curpgfstyle
+       \csname board@pgf@regionstyle\csname board@pgf@curbackstyle\endcsname\endcsname
+    \edef\next{\noexpand\board@pgf@curpgfstyle
+          {#2}%
+          {\unexpanded\expandafter{\board@pgf@curstyleopt}}}%
+    \next}%
+  \else
+   \PackageWarning{chessboard}%
+     {back style '\board@pgf@curbackstyle'  not defined for regions!
+      I will ignore the back commands}%
+  \fi}{}}%
+
+%% Move decoration
+%% the command called by the markmove key
+%% the command put the code directly in the pgf as no loop needed
+
+\newcommand\board@pgf@add@movemarkstyle[2]{% #1=from field, #2=to field.
+ \expandafter\board@split@areasort#1-#2ARGEND%
+ \ifthenelse%
+  {\board@test@isareaintrimarea
+   {\board@temp@curstartfilenum}{\board@temp@curstartranknum}%
+   {\board@temp@curstopfilenum}{\board@temp@curstopranknum}}%
+  {\ifcsname board@pgf@movestyle\board@pgf@curmarkstyle\endcsname
+   \board@pgf@addmarkground{%
+    \def\currentarea{#1-#2}%
+    \expandafter\board@split@areasort#1-#2ARGEND%
+    \edef\currentbq{\board@temp@curstartfilechar\board@temp@curstartranknum}%
+    \edef\currentbk{\board@temp@curstopfilechar\board@temp@curstartranknum}%
+    \edef\currentwq{\board@temp@curstartfilechar\board@temp@curstopranknum}%
+    \edef\currentwk{\board@temp@curstopfilechar\board@temp@curstopranknum}%
+    \def\currentfrom{#1}%
+    \def\currentto{#2}%
+    \pgftransformshift{\pgfpointanchor{#1}{center}}%
+    \expandafter\let\expandafter\board@pgf@curpgfstyle
+       \csname board@pgf@movestyle\csname board@pgf@curmarkstyle\endcsname\endcsname
+    \edef\next{\noexpand\board@pgf@curpgfstyle
+          {#2}%
+          {\unexpanded\expandafter{\board@pgf@curstyleopt}}}%
+    \next
+    }%
+  \else
+   \PackageWarning{chessboard}%
+     {mark style '\board@pgf@curmarkstyle'  not defined for moves!
+      I will ignore the mark commands}%
+  \fi}{}}%
+
+%% the command called by the backmove key
+%% the command put the code directly in the pgf as no loop needed
+
+\newcommand\board@pgf@add@movebackstyle[2]{% #1=from field, #2=to field.
+ \expandafter\board@split@areasort#1-#2ARGEND%
+ \ifthenelse%
+  {\board@test@isareaintrimarea
+   {\board@temp@curstartfilenum}{\board@temp@curstartranknum}%
+   {\board@temp@curstopfilenum}{\board@temp@curstopranknum}}%
+  {\ifcsname board@pgf@movestyle\board@pgf@curbackstyle\endcsname
+   \board@pgf@addbackground{%
+   \def\currentarea{#1-#2}%
+    \def\currentarea{#1-#2}%
+    \expandafter\board@split@areasort#1-#2ARGEND%
+    \edef\currentbq{\board@temp@curstartfilechar\board@temp@curstartranknum}%
+    \edef\currentbk{\board@temp@curstopfilechar\board@temp@curstartranknum}%
+    \edef\currentwq{\board@temp@curstartfilechar\board@temp@curstopranknum}%
+    \edef\currentwk{\board@temp@curstopfilechar\board@temp@curstopranknum}%
+    \def\currentfrom{#1}%
+    \def\currentto{#2}%
+    \pgftransformshift{\pgfpointanchor{#1}{center}}%
+    \expandafter\let\expandafter\board@pgf@curpgfstyle
+       \csname board@pgf@movestyle\csname board@pgf@curbackstyle\endcsname\endcsname
+    \edef\next{\noexpand\board@pgf@curpgfstyle
+          {#2}%
+          {\unexpanded\expandafter{\board@pgf@curstyleopt}}}%
+    \next
+    }%
+  \else
+   \PackageWarning{chessboard}%
+     {back style '\board@pgf@curbackstyle'  not defined for moves!
+      I will ignore the back commands}%
+  \fi}{}}%
+
+%%% User command to define pgf styles
+\newcommand\cbDefinePgfFieldStyle[2]{%#1=name, #2=pgf-commands
+  \expandafter\def\csname board@pgf@fieldstyle#1\endcsname##1##2{% ##1=field
+    \begin{pgfscope}%                                            % ##2=options
+     #2
+    \end{pgfscope}}}%
+
+\newcommand\cbDefinePgfRegionStyle[2]{%#1=name, #2=pgf-commands
+  \expandafter\def\csname board@pgf@regionstyle#1\endcsname##1##2{% ##1=oposite corner
+    \begin{pgfscope}%                                             % ##2=options
+     #2
+    \end{pgfscope}}}%
+
+\newcommand\cbDefinePgfMoveStyle[2]{%#1=name, #2=pgf-commands
+  \expandafter\def\csname board@pgf@movestyle#1\endcsname##1##2{% ##1 =to corner
+    \begin{pgfscope}%                                           % ##2 = options
+     #2
+    \end{pgfscope}}}%
+
+\let\cbDefineMarkFieldStyle\cbDefinePgfFieldStyle
+\let\cbDefineMarkRegionStyle\cbDefinePgfRegionStyle
+\let\cbDefineMarkMoveStyle\cbDefinePgfMoveStyle
+
+%%% some predefined pgf styles
+
+%% style none,  don't know if useful
+
+\cbDefinePgfFieldStyle{none}{\pgfusepath{discard}}%
+\cbDefinePgfRegionStyle{none}{\pgfusepath{discard}}%
+\cbDefinePgfMoveStyle{none}{\pgfusepath{discard}}%
+
+%% moves
+\cbDefinePgfMoveStyle{straightmove}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \setlength\len@board@tempx{\dimexpr 0.1em + \board@pgf@shortenstart \relax}%
+    \pgfsetshortenstart{\len@board@tempx}%
+    \setlength\len@board@tempx{\board@pgf@shortenend}%
+    \pgfsetshortenend{\len@board@tempx}%
+    \pgfsetarrowsend{\board@pgf@arrow}%
+    \pgfsetroundcap
+    \pgfpathmoveto{\pgfpointorigin}%
+    \pgfpathlineto{\pgfpointanchor{#1}{center}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfMoveStyle{knightmove}{%
+   \pgfsetlinewidth{\board@pgf@linewidth}%
+   \pgfsetarrowsend{\board@pgf@arrow}%
+   \setlength\len@board@tempx{\dimexpr 0.3em + \board@pgf@shortenstart \relax}%
+   \pgfsetshortenstart{\len@board@tempx}%
+   \setlength\len@board@tempx{\board@pgf@shortenend}%
+   \pgfsetshortenend{\len@board@tempx}%
+   \pgfextractx{\len@board@tempx}{\pgfpointanchor{#1}{center}}%
+   \pgfextracty{\len@board@tempy}{\pgfpointanchor{#1}{center}}%
+   \pgfpathmoveto{\pgfpointorigin}%
+   \pgfpathcurveto%
+    {\pgfpoint{0pt}{0.8\len@board@tempy}}%
+    {\pgfpoint{0.2\len@board@tempx}{\len@board@tempy}}%
+    {\pgfpointanchor{#1}{center}}%
+   \pgfusepath{stroke}}%
+
+%new 1.5.
+\newcommand\board@pgf@curvemove[2][]{
+ \setkeys[UFCB]{bez}{#1}%
+ \pgfsetlinewidth{\board@pgf@linewidth}%
+ \pgfsetarrowsend{\board@pgf@arrow}%
+ \setlength\len@board@tempx{\dimexpr 0.3em + \board@pgf@shortenstart \relax}%
+ \pgfsetshortenstart{\len@board@tempx}%
+ \setlength\len@board@tempx{\board@pgf@shortenend}%
+ \pgfsetshortenend{\len@board@tempx}%
+ \board@pgf@extractangle{\board@temp@angle}{#2}%
+ \board@pgf@extractlength{\len@board@tempy}{#2}%
+ \pgftransformrotate{\board@temp@angle}%
+ \pgfpathmoveto{\pgfpointorigin}%
+ \pgfpathcurveto
+  {\pgfpointadd{\pgfpoint{\board@val@bezxi*\len@board@tempy}{0cm}}%
+               {\pgfpointxy{0}{\board@val@pgfsign*\board@val@bezyi}}}%
+  {\pgfpointadd{\pgfpoint{\board@val@bezxii*\len@board@tempy}{0cm}}%
+               {\pgfpointxy{0}{\board@val@pgfsign*\board@val@bezyii}}}%
+  {\pgfpoint{\len@board@tempy}{0cm}}%
+ \pgfusepath{stroke}%
+}
+
+\cbDefinePgfMoveStyle{curvemove}{%
+    \board@pgf@curvemove[#2]{\pgfpointanchor{#1}{center}}}%
+
+\def\board@pgf@curvemovestyle@knight{\setkeys[UFCB]{bez}{x1=1/2,x2=2/3,y1=0.5,y2=0.5}}
+%% region
+
+\cbDefinePgfRegionStyle{text}{%
+ \pgfextractx{\len@board@tempx}{{\pgfpointanchor{#1}{center}}}%
+ \pgfextracty{\len@board@tempy}{{\pgfpointanchor{#1}{center}}}%
+ \pgftransformshift
+  {\pgfpointintersectionoflines
+     {\pgfpointxy{-0.5}{0.5}}%
+     {\pgfpointadd
+      {\pgfpoint{\len@board@tempx}{\len@board@tempy}}%
+      {\pgfpointxy{0.5}{-0.5}}}%
+     {\pgfpointadd
+       {\pgfpoint{\len@board@tempx}{0pt}}%
+       {\pgfpointxy{0.5}{0.5}}}%
+     {\pgfpointadd
+       {\pgfpoint{0pt}{\len@board@tempy}}%
+       {\pgfpointxy{-0.5}{-0.5}}}}%
+ \ifthenelse%
+  {\boolean{\XKV@UFCB@locset@inverse@value}}%
+  {\pgftext[rotate=180,#2]{\normalfont\board@pgf@curtext}}%
+  {\pgftext[#2]{\normalfont\board@pgf@curtext}}}%
+
+\cbDefinePgfRegionStyle{border}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfpathrectanglecorners%
+      {\pgfpointadd%
+       {\pgfpoint{-\board@pgf@padding}{\board@pgf@padding}}%
+       {\pgfpointxy{-0.5}{0.5}}}%
+      {\pgfpointadd%
+       {\pgfpointanchor{#1}{center}}%
+       {\pgfpointadd%
+        {\pgfpoint{\board@pgf@padding}{-\board@pgf@padding}}%
+        {\pgfpointxy{0.5}{-0.5}}}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfRegionStyle{color}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfpathrectanglecorners%
+      {\pgfpointadd%
+       {\pgfpoint{-\board@pgf@padding}{\board@pgf@padding}}%
+       {\pgfpointxy{-0.5}{0.5}}}%
+      {\pgfpointadd%
+       {\pgfpointanchor{#1}{center}}%
+       {\pgfpointadd%
+        {\pgfpoint{\board@pgf@padding}{-\board@pgf@padding}}%
+        {\pgfpointxy{0.5}{-0.5}}}}%
+    \pgfusepath{fill}}%
+
+\cbDefinePgfRegionStyle{leftborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfextracty{\len@board@tempy}{{\pgfpointanchor{#1}{center}}}%
+    \pgfpathmoveto{%
+     \pgfpointadd{\pgfpointxy{-0.5}{-0.5}}{\pgfpoint{-\board@pgf@padding}{\len@board@tempy}}}%
+    \pgfpathlineto{%
+     \pgfpointadd{\pgfpointxy{-0.5}{0.5}}{\pgfpoint{-\board@pgf@padding}{0pt}}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfRegionStyle{topborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfextractx{\len@board@tempx}{{\pgfpointanchor{#1}{center}}}%
+    \pgfpathmoveto{%
+     \pgfpointadd{\pgfpointxy{-0.5}{0.5}}{\pgfpoint{0pt}{\board@pgf@padding}}}%
+    \pgfpathlineto{%
+      \pgfpointadd{\pgfpointxy{0.5}{0.5}}{\pgfpoint{\len@board@tempx}{\board@pgf@padding}}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfRegionStyle{rightborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfextractx{\len@board@tempx}{{\pgfpointanchor{#1}{center}}}%
+    \pgfextracty{\len@board@tempy}{{\pgfpointanchor{#1}{center}}}%
+    \pgfpathmoveto{%
+     \pgfpointadd
+       {\pgfpointxy{0.5}{0.5}}%
+       {\pgfpointadd
+         {\pgfpoint{\len@board@tempx}{0pt}}%
+         {\pgfpoint{\board@pgf@padding}{0pt}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpoint{\len@board@tempx}{\len@board@tempy}}%
+      {\pgfpointadd
+       {\pgfpointxy{0.5}{-0.5}}%
+       {\pgfpoint{\board@pgf@padding}{0pt}}}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfRegionStyle{bottomborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfextractx{\len@board@tempx}{{\pgfpointanchor{#1}{center}}}%
+    \pgfextracty{\len@board@tempy}{{\pgfpointanchor{#1}{center}}}%
+    \pgfpathmoveto{%
+     \pgfpointadd
+      {\pgfpointanchor{#1}{center}}%
+      {\pgfpointadd
+       {\pgfpointxy{0.5}{-0.5}}%
+       {\pgfpoint{0pt}{-\board@pgf@padding}}}}%
+    \pgfpathlineto{%
+      \pgfpointadd
+       {\pgfpointxy{-0.5}{-0.5}}%
+       {\pgfpointadd
+         {\pgfpoint{0pt}{\len@board@tempy}}%
+         {\pgfpoint{0pt}{-\board@pgf@padding}}}}%
+    %\pgfpathlineto{{-\board@pgf@padding}{\len@board@tempy}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfRegionStyle{lefttopborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfextracty{\len@board@tempy}{{\pgfpointanchor{#1}{center}}}%
+    \pgfextractx{\len@board@tempx}{{\pgfpointanchor{#1}{center}}}%
+    \pgfpathmoveto{%
+     \pgfpointadd{\pgfpointxy{-0.5}{-0.5}}{\pgfpoint{-\board@pgf@padding}{\len@board@tempy}}}%
+    \pgfpathlineto{%
+     \pgfpointadd{\pgfpointxy{-0.5}{0.5}}{\pgfpoint{-\board@pgf@padding}{\board@pgf@padding}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{0.5}}%
+      {\pgfpoint{\len@board@tempx}{\board@pgf@padding}}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfRegionStyle{lefttoprightborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfextracty{\len@board@tempy}{{\pgfpointanchor{#1}{center}}}%
+    \pgfextractx{\len@board@tempx}{{\pgfpointanchor{#1}{center}}}%
+    \pgfpathmoveto{%
+     \pgfpointadd{\pgfpointxy{-0.5}{-0.5}}{\pgfpoint{-\board@pgf@padding}{\len@board@tempy}}}%
+    \pgfpathlineto{%
+     \pgfpointadd{\pgfpointxy{-0.5}{0.5}}{\pgfpoint{-\board@pgf@padding}{\board@pgf@padding}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{\len@board@tempx}{\board@pgf@padding}}%
+       {\pgfpoint{\board@pgf@padding}{0pt}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{-0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{\len@board@tempx}{\len@board@tempy}}%
+       {\pgfpoint{\board@pgf@padding}{0pt}}}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfRegionStyle{toprightborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfextracty{\len@board@tempy}{{\pgfpointanchor{#1}{center}}}%
+    \pgfextractx{\len@board@tempx}{{\pgfpointanchor{#1}{center}}}%
+    \pgfpathmoveto{%
+     \pgfpointadd{\pgfpointxy{-0.5}{0.5}}{\pgfpoint{0pt}{\board@pgf@padding}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{\len@board@tempx}{\board@pgf@padding}}%
+       {\pgfpoint{\board@pgf@padding}{0pt}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{-0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{\len@board@tempx}{\len@board@tempy}}%
+       {\pgfpoint{\board@pgf@padding}{0pt}}}}%
+       \pgfusepath{stroke}}%
+
+\cbDefinePgfRegionStyle{toprightbottomborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfextracty{\len@board@tempy}{{\pgfpointanchor{#1}{center}}}%
+    \pgfextractx{\len@board@tempx}{{\pgfpointanchor{#1}{center}}}%
+    \pgfpathmoveto{%
+     \pgfpointadd{\pgfpointxy{-0.5}{0.5}}{\pgfpoint{0pt}{\board@pgf@padding}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{\len@board@tempx}{\board@pgf@padding}}%
+       {\pgfpoint{\board@pgf@padding}{0pt}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{-0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{\len@board@tempx}{\len@board@tempy}}%
+       {\pgfpoint{\board@pgf@padding}{-\board@pgf@padding}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{-0.5}{-0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{0pt}{\len@board@tempy}}%
+       {\pgfpoint{0pt}{-\board@pgf@padding}}}}%
+       \pgfusepath{stroke}}%
+
+\cbDefinePgfRegionStyle{rightbottomborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfextractx{\len@board@tempx}{{\pgfpointanchor{#1}{center}}}%
+    \pgfextracty{\len@board@tempy}{{\pgfpointanchor{#1}{center}}}%
+    \pgfpathmoveto{%
+     \pgfpointadd
+       {\pgfpointxy{0.5}{0.5}}%
+       {\pgfpointadd
+         {\pgfpoint{\len@board@tempx}{0pt}}%
+         {\pgfpoint{\board@pgf@padding}{0pt}}}}%
+   \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{-0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{\len@board@tempx}{\len@board@tempy}}%
+       {\pgfpoint{\board@pgf@padding}{-\board@pgf@padding}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{-0.5}{-0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{0pt}{\len@board@tempy}}%
+       {\pgfpoint{0pt}{-\board@pgf@padding}}}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfRegionStyle{rightbottomleftborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfextractx{\len@board@tempx}{{\pgfpointanchor{#1}{center}}}%
+    \pgfextracty{\len@board@tempy}{{\pgfpointanchor{#1}{center}}}%
+    \pgfpathmoveto{%
+     \pgfpointadd
+       {\pgfpointxy{0.5}{0.5}}%
+       {\pgfpointadd
+         {\pgfpoint{\len@board@tempx}{0pt}}%
+         {\pgfpoint{\board@pgf@padding}{0pt}}}}%
+   \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{-0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{\len@board@tempx}{\len@board@tempy}}%
+       {\pgfpoint{\board@pgf@padding}{-\board@pgf@padding}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{-0.5}{-0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{0pt}{\len@board@tempy}}%
+       {\pgfpoint{-\board@pgf@padding}{-\board@pgf@padding}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{-0.5}{0.5}}%
+      {\pgfpoint{-\board@pgf@padding}{0pt}}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfRegionStyle{bottomleftborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfextractx{\len@board@tempx}{{\pgfpointanchor{#1}{center}}}%
+    \pgfextracty{\len@board@tempy}{{\pgfpointanchor{#1}{center}}}%
+    \pgfpathmoveto{%
+     \pgfpointadd
+      {\pgfpointanchor{#1}{center}}%
+      {\pgfpointadd
+       {\pgfpointxy{0.5}{-0.5}}%
+       {\pgfpoint{0pt}{-\board@pgf@padding}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{-0.5}{-0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{0pt}{\len@board@tempy}}%
+       {\pgfpoint{-\board@pgf@padding}{-\board@pgf@padding}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{-0.5}{0.5}}%
+      {\pgfpoint{-\board@pgf@padding}{0pt}}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfRegionStyle{bottomlefttopborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfextractx{\len@board@tempx}{{\pgfpointanchor{#1}{center}}}%
+    \pgfextracty{\len@board@tempy}{{\pgfpointanchor{#1}{center}}}%
+    \pgfpathmoveto{%
+     \pgfpointadd
+      {\pgfpointanchor{#1}{center}}%
+      {\pgfpointadd
+       {\pgfpointxy{0.5}{-0.5}}%
+       {\pgfpoint{0pt}{-\board@pgf@padding}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{-0.5}{-0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{0pt}{\len@board@tempy}}%
+       {\pgfpoint{-\board@pgf@padding}{-\board@pgf@padding}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{-0.5}{0.5}}%
+      {\pgfpoint{-\board@pgf@padding}{\board@pgf@padding}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{0.5}}%
+      {\pgfpoint{\len@board@tempx}{\board@pgf@padding}}}%
+    \pgfusepath{stroke}}%
+
+%% Fields
+\cbDefinePgfFieldStyle{cross}{%
+    \pgfsetroundcap
+    \setlength\len@board@tempx{\dimexpr 0.1em + \board@pgf@shortenstart \relax}%
+    \pgfsetshortenstart{\len@board@tempx}%
+    \setlength\len@board@tempx{\dimexpr 0.1em + \board@pgf@shortenend \relax}%
+    \pgfsetshortenend{\len@board@tempx}%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfpathmoveto{\pgfpointxy{0.5}{0.5}}%
+    \pgfpathlineto{\pgfpointxy{-0.5}{-0.5}}%
+    \pgfusepath{stroke}%
+    \pgfpathmoveto{\pgfpointxy{-0.5}{0.5}}%
+    \pgfpathlineto{\pgfpointxy{0.5}{-0.5}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfFieldStyle{circle}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \setlength\len@board@tempx{\dimexpr 0.55em + \board@pgf@padding \relax}%
+    \pgfpathcircle{\pgfpointxy{0}{0}}{\len@board@tempx}%
+    \pgfusepath{stroke,#2}}%
+
+\cbDefinePgfFieldStyle{text}{%
+    \ifthenelse%
+     {\boolean{\XKV@UFCB@locset@inverse@value}}%
+     {\pgftext[rotate=180,#2]{\normalfont\board@pgf@curtext}}%
+     {\pgftext[#2]{\normalfont\board@pgf@curtext}}}%
+
+\cbDefinePgfFieldStyle{border}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfpathrectanglecorners
+      {\pgfpointadd%
+       {\pgfpoint{-\board@pgf@padding}{-\board@pgf@padding}}%
+       {\pgfpointxy{-0.5}{-0.5}}}%
+      {\pgfpointadd%
+       {\pgfpoint{\board@pgf@padding}{\board@pgf@padding}}%
+       {\pgfpointxy{0.5}{0.5}}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfFieldStyle{color}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfpathrectanglecorners
+     {\pgfpointadd%
+       {\pgfpoint{-\board@pgf@padding}{-\board@pgf@padding}}%
+       {\pgfpointxy{-0.5}{-0.5}}}%
+      {\pgfpointadd%
+       {\pgfpoint{\board@pgf@padding}{\board@pgf@padding}}%
+       {\pgfpointxy{0.5}{0.5}}}%
+    \pgfusepath{fill}}%
+
+\cbDefinePgfFieldStyle{leftborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfpathmoveto{%
+     \pgfpointadd{\pgfpointxy{-0.5}{-0.5}}{\pgfpoint{-\board@pgf@padding}{0pt}}}%
+    \pgfpathlineto{%
+     \pgfpointadd{\pgfpointxy{-0.5}{0.5}}{\pgfpoint{-\board@pgf@padding}{0pt}}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfFieldStyle{topborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfpathmoveto{%
+     \pgfpointadd{\pgfpointxy{-0.5}{0.5}}{\pgfpoint{0pt}{\board@pgf@padding}}}%
+    \pgfpathlineto{%
+      \pgfpointadd{\pgfpointxy{0.5}{0.5}}{\pgfpoint{0pt}{\board@pgf@padding}}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfFieldStyle{rightborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfpathmoveto{%
+     \pgfpointadd
+       {\pgfpointxy{0.5}{0.5}}%
+       {\pgfpoint{\board@pgf@padding}{0pt}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+       {\pgfpointxy{0.5}{-0.5}}%
+       {\pgfpoint{\board@pgf@padding}{0pt}}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfFieldStyle{bottomborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfpathmoveto{%
+     \pgfpointadd
+       {\pgfpointxy{0.5}{-0.5}}%
+       {\pgfpoint{0pt}{-\board@pgf@padding}}}%
+    \pgfpathlineto{%
+      \pgfpointadd
+       {\pgfpointxy{-0.5}{-0.5}}%
+       {\pgfpoint{0pt}{-\board@pgf@padding}}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfFieldStyle{lefttopborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfpathmoveto{%
+     \pgfpointadd{\pgfpointxy{-0.5}{-0.5}}{\pgfpoint{-\board@pgf@padding}{0pt}}}%
+    \pgfpathlineto{%
+     \pgfpointadd{\pgfpointxy{-0.5}{0.5}}{\pgfpoint{-\board@pgf@padding}{\board@pgf@padding}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{0.5}}%
+      {\pgfpoint{0pt}{\board@pgf@padding}}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfFieldStyle{lefttoprightborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfpathmoveto{%
+     \pgfpointadd{\pgfpointxy{-0.5}{-0.5}}{\pgfpoint{-\board@pgf@padding}{0pt}}}%
+    \pgfpathlineto{%
+     \pgfpointadd{\pgfpointxy{-0.5}{0.5}}{\pgfpoint{-\board@pgf@padding}{\board@pgf@padding}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{0pt}{\board@pgf@padding}}%
+       {\pgfpoint{\board@pgf@padding}{0pt}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{-0.5}}%
+      {\pgfpoint{\board@pgf@padding}{0pt}}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfFieldStyle{toprightborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+     \pgfpathmoveto{%
+     \pgfpointadd{\pgfpointxy{-0.5}{0.5}}{\pgfpoint{0pt}{\board@pgf@padding}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{0pt}{\board@pgf@padding}}%
+       {\pgfpoint{\board@pgf@padding}{0pt}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{-0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{0pt}{0pt}}%
+       {\pgfpoint{\board@pgf@padding}{0pt}}}}%
+       \pgfusepath{stroke}}%
+
+\cbDefinePgfFieldStyle{toprightbottomborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfpathmoveto{%
+     \pgfpointadd{\pgfpointxy{-0.5}{0.5}}{\pgfpoint{0pt}{\board@pgf@padding}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{0pt}{\board@pgf@padding}}%
+       {\pgfpoint{\board@pgf@padding}{0pt}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{-0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{0pt}{0pt}}%
+       {\pgfpoint{\board@pgf@padding}{-\board@pgf@padding}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{-0.5}{-0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{0pt}{0pt}}%
+       {\pgfpoint{0pt}{-\board@pgf@padding}}}}%
+       \pgfusepath{stroke}}%
+
+\cbDefinePgfFieldStyle{rightbottomborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfpathmoveto{%
+     \pgfpointadd
+       {\pgfpointxy{0.5}{0.5}}%
+       {\pgfpointadd
+         {\pgfpoint{0pt}{0pt}}%
+         {\pgfpoint{\board@pgf@padding}{0pt}}}}%
+   \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{-0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{0pt}{0pt}}%
+       {\pgfpoint{\board@pgf@padding}{-\board@pgf@padding}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{-0.5}{-0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{0pt}{0pt}}%
+       {\pgfpoint{0pt}{-\board@pgf@padding}}}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfFieldStyle{rightbottomleftborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfpathmoveto{%
+     \pgfpointadd
+       {\pgfpointxy{0.5}{0.5}}%
+       {\pgfpointadd
+         {\pgfpoint{0pt}{0pt}}%
+         {\pgfpoint{\board@pgf@padding}{0pt}}}}%
+   \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{-0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{0pt}{0pt}}%
+       {\pgfpoint{\board@pgf@padding}{-\board@pgf@padding}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{-0.5}{-0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{0pt}{0pt}}%
+       {\pgfpoint{-\board@pgf@padding}{-\board@pgf@padding}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{-0.5}{0.5}}%
+      {\pgfpoint{-\board@pgf@padding}{0pt}}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfFieldStyle{bottomleftborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfpathmoveto{%
+     \pgfpointadd
+       {\pgfpointxy{0.5}{-0.5}}%
+       {\pgfpoint{0pt}{-\board@pgf@padding}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{-0.5}{-0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{0pt}{0pt}}%
+       {\pgfpoint{-\board@pgf@padding}{-\board@pgf@padding}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{-0.5}{0.5}}%
+      {\pgfpoint{-\board@pgf@padding}{0pt}}}%
+    \pgfusepath{stroke}}%
+
+\cbDefinePgfFieldStyle{bottomlefttopborder}{%
+    \pgfsetlinewidth{\board@pgf@linewidth}%
+    \pgfsetcornersarced{\pgfpoint{\board@pgf@corner}{\board@pgf@corner}}%
+    \pgfsetshortenstart{\board@pgf@shortenstart}%
+    \pgfsetshortenend{\board@pgf@shortenend}%
+    \pgfpathmoveto{%
+     \pgfpointadd
+       {\pgfpointxy{0.5}{-0.5}}%
+       {\pgfpoint{0pt}{-\board@pgf@padding}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{-0.5}{-0.5}}%
+      {\pgfpointadd
+       {\pgfpoint{0pt}{0pt}}%
+       {\pgfpoint{-\board@pgf@padding}{-\board@pgf@padding}}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{-0.5}{0.5}}%
+      {\pgfpoint{-\board@pgf@padding}{\board@pgf@padding}}}%
+    \pgfpathlineto{%
+     \pgfpointadd
+      {\pgfpointxy{0.5}{0.5}}%
+      {\pgfpoint{0pt}{\board@pgf@padding}}}%
+    \pgfusepath{stroke}}%
+
+
+%</chessboard-pgf>
+%<*chessboard-keys-main>
+\ProvidesFile{chessboard-keys-main.sty}[2019/06/23 version v1.8 key definitions for chessboard.sty]
+%%$Date: 2011/03/23 08:42:57 $$Version: 66142533647c $
+
+%%file=Linie=column=vertikal=al_f_abetisch= a-h
+%%rank=Reihe=row=horizontal=numbe_r_=1-8
+
+%%%%%%%%%%%%%%%%%%%%%
+%%%% Keys
+%%%%%%%%%%%%%%%%%%%%%
+%%%%
+%%% Nullkey, does nothing
+%%%%
+\define@key[UFCB]{locinit}{@null}{}
+\define@key[UFCB]{locset}{@null}{}
+\define@key[UFCB]{locfill}{@null}{}
+\define@key[UFCB]{gloinit}{@null}{}
+\define@key[UFCB]{gloset}{@null}{}
+\define@key[UFCB]{glofill}{@null}{}
+%%%%
+
+%% internal Keys to expand styles, added in 1.4. to repair xkeyval problem
+
+\define@key[UFCB]{@start}{style}{%
+  \toks@=\expandafter\expandafter\expandafter{\csname board@val@style#1keylist\endcsname}%
+  \edef\@@next{\noexpand\board@do@l@addto@macro\noexpand\board@temp@keylist{,\the\toks@}}%
+  \@@next}
+
+\define@key[UFCB]{@start}{board@expand}{%
+ \@for\board@temp@keypair:=#1\do
+  {\expandafter\XKV@g@tkeyname\board@temp@keypair=\@nil\board@temp@keyname
+   \edef\next{\noexpand\key@ifundefined[UFCB]{@start}{\board@temp@keyname}}%
+   \next{\expandafter\board@do@l@addto@macro\expandafter\board@temp@keylist\expandafter{\expandafter,\board@temp@keypair}}%
+        {\edef\@next{\noexpand\setkeys[UFCB]{@start}{\board@temp@keypair}}\@next}}}%
+
+
+%%%%%
+%%% Init keys
+%%%%
+
+%%%
+%% style, can contain any key, so should be processed at start (init).
+%%%
+
+\define@key[UFCB]{locinit}{style}{% D
+  \csname board@use@locstyle@#1\endcsname}
+
+\define@key[UFCB]{gloinit}{style}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,style=#1}}
+
+%%%
+%% defaults, should only be set globally (don't make sense elsewhere)
+%%%
+
+\define@choicekey*[UFCB]{gloinit}{moverdefault}[\board@val@mover]{w,b}{}
+\define@key[UFCB]{gloinit}{castlingdefault}{\def\board@val@castling{#1}}
+\define@key[UFCB]{gloinit}{enpassantdefault}{\def\board@val@enpassant{#1}}
+\define@key[UFCB]{gloinit}{halfmovedefault}{\def\board@val@halfmove{#1}}
+\define@key[UFCB]{gloinit}{fullmovedefault}{\def\board@val@fullmove{#1}}
+
+%%% Dimension of the board
+%%% the right-top corner. Used from clearboard and to set pieces with position
+
+\define@key[UFCB]{locinit}{maxfield}{% D
+  \expandafter\board@split@field#1ARGEND%
+  \edef\board@val@maxfilechar{\board@temp@curfilechar}%
+  \edef\board@val@maxfilenum{\board@temp@curfilenum}%
+  \edef\board@val@maxranknum{\board@temp@curranknum}%
+  %% start rank numbers
+  \edef\board@val@startfenranknum{\board@temp@curranknum}%
+  \edef\board@val@startfillranknum{\board@temp@curranknum}%
+  \edef\board@val@startprintranknum{\board@temp@curranknum}%
+  \edef\board@val@startstoreranknum{\board@temp@curranknum}%
+  %% stop file numbers
+  \edef\board@val@stopfillfilenum{\board@temp@curfilenum}%
+  \edef\board@val@stopprintfilenum{\board@temp@curfilenum}%
+  \edef\board@val@stopstorefilenum{\board@temp@curfilenum}%
+  %% stop file chars
+  \edef\board@val@stopfillfilechar{\board@temp@curfilechar}%
+  \edef\board@val@stopprintfilechar{\board@temp@curfilechar}%
+  \edef\board@val@stopstorefilechar{\board@temp@curfilechar}%
+  }
+
+\define@key[UFCB]{gloinit}{maxfield}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,maxfield=#1}{}}
+
+%%% the left-bottom corner can be set to start with @0.
+%%% Used from clearboard and to set pieces with fen
+%%% boolean key, true is the default, that is zero is the same as zero=true
+
+\define@boolkey[UFCB]{locinit}{zero}[true]{% D
+  \ifUFCB@locinit@zero
+   \def\board@temp@char{Z}%
+   \def\board@temp@num{0}%
+  \else
+   \def\board@temp@char{a}%
+   \def\board@temp@num{1}%
+  \fi
+  \edef\board@val@minfilechar{\board@temp@char}%
+  \edef\board@val@minfilenum{\board@temp@num}%
+  \edef\board@val@minranknum{\board@temp@num}%
+  %% start file numbers
+  \edef\board@val@startfenfilenum{\board@temp@num}%
+  \edef\board@val@startfillfilenum{\board@temp@num}%
+  \edef\board@val@startprintfilenum{\board@temp@num}%
+  \edef\board@val@startstorefilenum{\board@temp@num}%
+  %% start file chars
+  \edef\board@val@startfenfilechar{\board@temp@char}%
+  \edef\board@val@startfillfilechar{\board@temp@char}%
+  \edef\board@val@startprintfilechar{\board@temp@char}%
+  \edef\board@val@startstorefilechar{\board@temp@char}%
+  %% stop rank numbers
+  \edef\board@val@stopfillranknum{\board@temp@num}%
+  \edef\board@val@stopprintranknum{\board@temp@num}%
+  \edef\board@val@stopstoreranknum{\board@temp@num}%
+  }
+
+\define@key[UFCB]{gloinit}{zero}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,zero=#1}{}}
+
+%%% disable the printing
+\define@boolkey[UFCB]{locinit}{print}[true]{} %D
+
+\define@boolkey[UFCB]{gloinit}{print}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,print=#1}{}}
+
+%%%%%%
+%% Set-keys
+%%%%%%
+%%% "print corner"
+
+\define@key[UFCB]{locset}{startprint}{% D
+  \expandafter\board@split@field#1ARGEND%
+  \let\board@val@startprintfilechar\board@temp@curfilechar
+  \let\board@val@startprintfilenum\board@temp@curfilenum
+  \let\board@val@startprintranknum\board@temp@curranknum}
+
+\define@key[UFCB]{gloset}{startprint}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,startprint=#1}{}}
+
+\define@key[UFCB]{locset}{stopprint}{% D
+  \expandafter\board@split@field#1ARGEND%
+  \let\board@val@stopprintfilechar\board@temp@curfilechar
+  \let\board@val@stopprintfilenum\board@temp@curfilenum%
+  \let\board@val@stopprintranknum\board@temp@curranknum}
+
+\define@key[UFCB]{gloset}{stopprint}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,stopprint=#1}{}}
+
+\define@key[UFCB]{locset}{printarea}{% a7-f1 % D
+  \expandafter\board@split@areasort#1ARGEND%
+  \board@do@setsinglekeys*[UFCB]{locset}{%
+    startprint=\board@temp@curstartfield, stopprint=\board@temp@curstopfield}}%
+
+\define@key[UFCB]{gloset}{printarea}{% a7-f1 % D
+  \board@do@l@addto@macro\board@val@savedkeylist{,printarea=#1}{}}%
+
+%%% print inverse
+
+\define@boolkey[UFCB]{locset}{inverse}[true]{} % D
+
+\define@boolkey[UFCB]{gloset}{inverse}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,inverse=#1}{}}
+
+%%%
+%% margin
+%%%
+
+\define@key[UFCB]{locset}{marginleftwidth}{% D
+  \def\board@val@marginleftwidth{#1}}
+
+\define@key[UFCB]{gloset}{marginleftwidth}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,marginleftwidth=#1}{}}
+
+\define@key[UFCB]{locset}{marginrightwidth}{% D
+  \def\board@val@marginrightwidth{#1}}
+
+\define@key[UFCB]{gloset}{marginrightwidth}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,marginrightwidth=#1}{}}
+
+\define@key[UFCB]{locset}{margintopwidth}{% D
+  \def\board@val@margintopwidth{#1}}
+
+\define@key[UFCB]{gloset}{margintopwidth}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,margintopwidth=#1}{}}
+
+\define@key[UFCB]{locset}{marginbottomwidth}{% D
+  \def\board@val@marginbottomwidth{#1}}
+
+\define@key[UFCB]{gloset}{marginbottomwidth}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,marginbottomwidth=#1}{}}
+
+\define@key[UFCB]{locset}{hmarginwidth}{% D
+    \board@do@setsinglekeys*[UFCB]{locset}{marginleftwidth=#1, marginrightwidth=#1}}
+
+\define@key[UFCB]{gloset}{hmarginwidth}{% D
+    \board@do@setsinglekeys*[UFCB]{gloset}{marginleftwidth=#1, marginrightwidth=#1}}
+
+\define@key[UFCB]{locset}{vmarginwidth}{% D
+    \board@do@setsinglekeys*[UFCB]{locset}{margintopwidth=#1, marginbottomwidth=#1}}
+
+\define@key[UFCB]{gloset}{vmarginwidth}{% D
+    \board@do@setsinglekeys*[UFCB]{gloset}{margintopwidth=#1, marginbottomwidth=#1}}
+
+\define@key[UFCB]{locset}{marginwidth}{% D
+    \board@do@setsinglekeys*[UFCB]{locset}{%
+      marginleftwidth=#1, marginrightwidth=#1, margintopwidth=#1, marginbottomwidth=#1}}
+
+\define@key[UFCB]{gloset}{marginwidth}{% D
+    \board@do@setsinglekeys*[UFCB]{gloset}{%
+      marginleftwidth=#1, marginrightwidth=#1, margintopwidth=#1, marginbottomwidth=#1}}
+
+\define@boolkey[UFCB]{locset}{marginleft}[true]{} %D
+
+\define@boolkey[UFCB]{gloset}{marginleft}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,marginleft=#1}{}}
+
+\define@boolkey[UFCB]{locset}{marginright}[true]{} %D
+
+\define@boolkey[UFCB]{gloset}{marginright}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,marginright=#1}{}}
+
+\define@boolkey[UFCB]{locset}{margintop}[true]{} %D
+
+\define@boolkey[UFCB]{gloset}{margintop}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,margintop=#1}{}}
+
+\define@boolkey[UFCB]{locset}{marginbottom}[true]{} %D
+
+\define@boolkey[UFCB]{gloset}{marginbottom}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,marginbottom=#1}{}}
+
+\define@boolkey[UFCB]{locset}{hmargin}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{marginleft=#1, marginright=#1}}
+
+\define@boolkey[UFCB]{gloset}{hmargin}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{gloset}{marginleft=#1, marginright=#1}}
+
+\define@boolkey[UFCB]{locset}{vmargin}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{margintop=#1, marginbottom=#1}}
+
+\define@boolkey[UFCB]{gloset}{vmargin}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{gloset}{margintop=#1, marginbottom=#1}}
+
+\define@boolkey[UFCB]{locset}{margin}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{marginleft=#1, marginright=#1, margintop=#1, marginbottom=#1}}
+
+\define@boolkey[UFCB]{gloset}{margin}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{gloset}{marginleft=#1, marginright=#1, margintop=#1, marginbottom=#1}}
+
+%% border
+
+\define@boolkey[UFCB]{locset}{borderleft}[true]{} % D
+
+\define@boolkey[UFCB]{gloset}{borderleft}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,borderleft=#1}{}}
+
+\define@boolkey[UFCB]{locset}{borderright}[true]{} % D
+
+\define@boolkey[UFCB]{gloset}{borderright}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,borderright=#1}{}}
+
+\define@boolkey[UFCB]{locset}{bordertop}[true]{} %D
+
+\define@boolkey[UFCB]{gloset}{bordertop}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,bordertop=#1}{}}
+
+\define@boolkey[UFCB]{locset}{borderbottom}[true]{} %D
+
+\define@boolkey[UFCB]{gloset}{borderbottom}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,borderbottom=#1}{}}
+
+\define@boolkey[UFCB]{locset}{hborder}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{borderleft=#1, borderright=#1}}
+
+\define@boolkey[UFCB]{gloset}{hborder}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{gloset}{borderleft=#1, borderright=#1}}
+
+\define@boolkey[UFCB]{locset}{vborder}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{bordertop=#1, borderbottom=#1}}
+
+\define@boolkey[UFCB]{gloset}{vborder}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{gloset}{bordertop=#1, borderbottom=#1}}
+
+\define@boolkey[UFCB]{locset}{border}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{borderleft=#1, borderright=#1, bordertop=#1, borderbottom=#1}}
+
+\define@boolkey[UFCB]{gloset}{border}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{gloset}{borderleft=#1, borderright=#1, bordertop=#1, borderbottom=#1}}
+
+\define@key[UFCB]{locset}{borderleftwidth}{% D
+  \def\board@val@borderleftwidth{#1}}
+
+\define@key[UFCB]{gloset}{borderleftwidth}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,borderleftwidth=#1}{}}
+
+\define@key[UFCB]{locset}{borderrightwidth}{% D
+  \def\board@val@borderrightwidth{#1}}
+
+\define@key[UFCB]{gloset}{borderrightwidth}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,borderrightwidth=#1}{}}
+
+\define@key[UFCB]{locset}{bordertopwidth}{% D
+  \def\board@val@bordertopwidth{#1}}
+
+\define@key[UFCB]{gloset}{bordertopwidth}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,bordertopwidth=#1}{}}
+
+\define@key[UFCB]{locset}{borderbottomwidth}{% D
+  \def\board@val@borderbottomwidth{#1}}
+
+\define@key[UFCB]{gloset}{borderbottomwidth}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,borderbottomwidth=#1}{}}
+
+\define@key[UFCB]{locset}{hborderwidth}{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{borderleftwidth=#1, borderrightwidth=#1}}
+
+\define@key[UFCB]{gloset}{hborderwidth}{% D
+  \board@do@setsinglekeys*[UFCB]{gloset}{borderleftwidth=#1, borderrightwidth=#1}}
+
+\define@key[UFCB]{locset}{vborderwidth}{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{bordertopwidth=#1, borderbottomwidth=#1}}
+
+\define@key[UFCB]{gloset}{vborderwidth}{% D
+  \board@do@setsinglekeys*[UFCB]{gloset}{bordertopwidth=#1, borderbottomwidth=#1}}
+
+\define@key[UFCB]{locset}{borderwidth}{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{%
+   borderleftwidth=#1, borderrightwidth=#1, bordertopwidth=#1, borderbottomwidth=#1}}
+
+\define@key[UFCB]{gloset}{borderwidth}{% D
+  \board@do@setsinglekeys*[UFCB]{gloset}{%
+   borderleftwidth=#1, borderrightwidth=#1, bordertopwidth=#1, borderbottomwidth=#1}}
+
+%%% border color
+
+\define@key[UFCB]{locset}{borderleftcolor}{% D
+  \def\board@val@borderleftcolor{\color{#1}}}
+
+\define@key[UFCB]{gloset}{borderleftcolor}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,borderleftcolor=#1}{}}
+
+\define@key[UFCB]{locset}{borderrightcolor}{% D
+  \def\board@val@borderrightcolor{\color{#1}}}
+
+\define@key[UFCB]{gloset}{borderrightcolor}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,borderrightcolor=#1}{}}
+
+\define@key[UFCB]{locset}{bordertopcolor}{% D
+  \def\board@val@bordertopcolor{\color{#1}}}
+
+\define@key[UFCB]{gloset}{bordertopcolor}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,bordertopcolor=#1}{}}
+
+\define@key[UFCB]{locset}{borderbottomcolor}{% D
+  \def\board@val@borderbottomcolor{\color{#1}}}
+
+\define@key[UFCB]{gloset}{borderbottomcolor}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,borderbottomcolor=#1}{}}
+
+\define@key[UFCB]{locset}{hbordercolor}{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{borderleftcolor=#1, borderrightcolor=#1}}
+
+\define@key[UFCB]{gloset}{hbordercolor}{% D
+  \board@do@setsinglekeys*[UFCB]{gloset}{borderleftcolor=#1, borderrightcolor=#1}}
+
+\define@key[UFCB]{locset}{vbordercolor}{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{bordertopcolor=#1, borderbottomcolor=#1}}
+
+\define@key[UFCB]{gloset}{vbordercolor}{% D
+  \board@do@setsinglekeys*[UFCB]{gloset}{bordertopcolor=#1, borderbottomcolor=#1}}
+
+\define@key[UFCB]{locset}{bordercolor}{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{%
+    borderleftcolor=#1, borderrightcolor=#1, bordertopcolor=#1, borderbottomcolor=#1}}
+
+\define@key[UFCB]{gloset}{bordercolor}{% D
+  \board@do@setsinglekeys*[UFCB]{gloset}{%
+    borderleftcolor=#1, borderrightcolor=#1, bordertopcolor=#1, borderbottomcolor=#1}}
+
+%%%%
+%% font
+%%%
+
+\define@key[UFCB]{locset}{boardfontsize}{% D
+  \setboardfontsize{#1}}
+
+\define@key[UFCB]{gloset}{boardfontsize}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,boardfontsize=#1}{}}
+
+\define@key[UFCB]{locset}{boardfontfamily}{% D
+  \setboardfontfamily{#1}}
+
+\define@key[UFCB]{gloset}{boardfontfamily}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,boardfontfamily=#1}{}}
+
+\define@key[UFCB]{locset}{boardfontseries}{% D
+  \setboardfontseries{#1}}
+
+\define@key[UFCB]{gloset}{boardfontseries}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,boardfontseries=#1}{}}
+
+%% shorter name:
+
+\define@key[UFCB]{locset}{fontsize}{%
+ \board@do@setsinglekeys*[UFCB]{locset}{boardfontsize=#1}}
+
+\define@key[UFCB]{gloset}{fontsize}{%
+ \board@do@setsinglekeys*[UFCB]{gloset}{boardfontsize=#1}}
+
+\define@key[UFCB]{locset}{fontfamily}{%
+ \board@do@setsinglekeys*[UFCB]{locset}{boardfontfamily=#1}}
+
+\define@key[UFCB]{gloset}{fontfamily}{%
+ \board@do@setsinglekeys*[UFCB]{locset}{boardfontfamily=#1}}
+
+%%% only for the sake of completeness. Better don't mention it.
+\define@key[UFCB]{locset}{boardfontencoding}{% D
+  \def\cfss@boardfontencoding{#1}}
+
+\define@key[UFCB]{gloset}{boardfontencoding}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,boardfontencoding=#1}{}}
+
+%%% mover
+
+\define@boolkey[UFCB]{locset}{showmover}[true]{} % D
+
+\define@boolkey[UFCB]{gloset}{showmover}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,showmover=#1}{}}
+
+\define@key[UFCB]{locset}{moversize}{% D
+  \def\board@val@moversize{#1}}
+
+\define@key[UFCB]{gloset}{moversize}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,moversize=#1}{}}
+
+\define@key[UFCB]{locset}{moverstyle}{% D
+  \def\board@val@moverstyle{#1}}
+
+\define@key[UFCB]{gloset}{moverstyle}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,moverstyle=#1}{}}
+
+\define@key[UFCB]{locset}{moverbottomlift}{% D
+  \def\board@val@moverbottomlift{#1}}
+
+\define@key[UFCB]{gloset}{moverbottomlift}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,moverbottomlift=#1}{}}
+
+\define@key[UFCB]{locset}{movertoplift}{% D
+  \def\board@val@movertoplift{#1}}
+
+\define@key[UFCB]{gloset}{movertoplift}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,movertoplift=#1}{}}
+
+\define@key[UFCB]{locset}{moverlift}{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{moverbottomlift=#1,movertoplift=#1}}
+
+\define@key[UFCB]{gloset}{moverlift}{% D
+   \board@do@setsinglekeys*[UFCB]{gloset}{moverbottomlift=#1,movertoplift=#1}}
+
+\define@key[UFCB]{locset}{moverbottomshift}{% D
+  \def\board@val@moverbottomshift{#1}}
+
+\define@key[UFCB]{gloset}{moverbottomshift}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,moverbottomshift=#1}{}}
+
+\define@key[UFCB]{locset}{movertopshift}{% D
+  \def\board@val@movertopshift{#1}}
+
+\define@key[UFCB]{gloset}{movertopshift}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,movertopshift=#1}{}}
+
+\define@key[UFCB]{locset}{movershift}{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{moverbottomshift=#1, movertopshift=#1}}
+
+\define@key[UFCB]{gloset}{movershift}{% D
+ \board@do@setsinglekeys*[UFCB]{gloset}{moverbottomshift=#1, movertopshift=#1}}
+
+%%% labels
+
+\define@boolkey[UFCB]{locset}{labelleft}[true]{} %D
+
+\define@boolkey[UFCB]{gloset}{labelleft}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labelleft=#1}{}}
+
+\define@boolkey[UFCB]{locset}{labelright}[true]{} %D
+
+\define@boolkey[UFCB]{gloset}{labelright}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labelright=#1}{}}
+
+\define@boolkey[UFCB]{locset}{labeltop}[true]{} %D
+
+\define@boolkey[UFCB]{gloset}{labeltop}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labeltop=#1}{}}
+
+\define@boolkey[UFCB]{locset}{labelbottom}[true]{} %D
+
+\define@boolkey[UFCB]{gloset}{labelbottom}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labelbottom=#1}{}}
+
+\define@boolkey[UFCB]{locset}{hlabel}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{labelleft=#1, labelright=#1}}
+
+\define@boolkey[UFCB]{gloset}{hlabel}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{gloset}{labelleft=#1, labelright=#1}}
+
+\define@boolkey[UFCB]{locset}{vlabel}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{labeltop=#1, labelbottom=#1}}
+
+\define@boolkey[UFCB]{gloset}{vlabel}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{gloset}{labeltop=#1, labelbottom=#1}}
+
+\define@boolkey[UFCB]{locset}{label}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{%
+    labelleft=#1, labelright=#1, labeltop=#1, labelbottom=#1}}
+
+\define@boolkey[UFCB]{gloset}{label}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{gloset}{%
+    labelleft=#1, labelright=#1, labeltop=#1, labelbottom=#1}}
+
+%% width
+\define@key[UFCB]{locset}{labelleftwidth}{% D
+  \def\board@val@labelleftwidth{#1}}
+
+\define@key[UFCB]{gloset}{labelleftwidth}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labelleftwidth=#1}{}}
+
+\define@key[UFCB]{locset}{labelrightwidth}{% D
+  \def\board@val@labelrightwidth{#1}}
+
+\define@key[UFCB]{gloset}{labelrightwidth}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labelrightwidth=#1}{}}
+
+\define@key[UFCB]{locset}{labelbottomwidth}{% D
+  \def\board@val@labelbottomwidth{#1}}
+
+\define@key[UFCB]{gloset}{labelbottomwidth}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labelbottomwidth=#1}{}}
+
+\define@key[UFCB]{locset}{hlabelwidth}{% D
+    \board@do@setsinglekeys*[UFCB]{locset}{labelleftwidth=#1, labelrightwidth=#1}}
+
+\define@key[UFCB]{gloset}{hlabelwidth}{% D
+    \board@do@setsinglekeys*[UFCB]{gloset}{labelleftwidth=#1, labelrightwidth=#1}}
+
+%% lift
+\define@key[UFCB]{locset}{labelleftlift}{% D
+  \def\board@val@labelleftlift{#1}}
+
+\define@key[UFCB]{gloset}{labelleftlift}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labelleftlift=#1}{}}
+
+\define@key[UFCB]{locset}{labelrightlift}{% D
+  \def\board@val@labelrightlift{#1}}
+
+\define@key[UFCB]{gloset}{labelrightlift}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labelrightlift=#1}{}}
+
+\define@key[UFCB]{locset}{labeltoplift}{% D
+  \def\board@val@labeltoplift{#1}}
+
+\define@key[UFCB]{gloset}{labeltoplift}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labeltoplift=#1}{}}
+
+\define@key[UFCB]{locset}{labelbottomlift}{% D
+  \def\board@val@labelbottomlift{#1}}
+
+\define@key[UFCB]{gloset}{labelbottomlift}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labelbottomlift=#1}{}}
+
+\define@key[UFCB]{locset}{hlabellift}{% D
+    \board@do@setsinglekeys*[UFCB]{locset}{labelleftlift=#1, labelrightlift=#1}}
+
+\define@key[UFCB]{gloset}{hlabellift}{% D
+    \board@do@setsinglekeys*[UFCB]{gloset}{labelleftlift=#1, labelrightlift=#1}}
+
+\define@key[UFCB]{locset}{vlabellift}{% D
+    \board@do@setsinglekeys*[UFCB]{locset}{labeltoplift=#1, labelbottomlift=#1}}
+
+\define@key[UFCB]{gloset}{vlabellift}{% D
+    \board@do@setsinglekeys*[UFCB]{gloset}{labeltoplift=#1, labelbottomlift=#1}}
+
+%% font
+
+\define@key[UFCB]{locset}{labelleftfont}{% D
+  \def\board@val@labelleftfont{#1}}
+
+\define@key[UFCB]{gloset}{labelleftfont}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labelleftfont=#1}{}}
+
+\define@key[UFCB]{locset}{labelrightfont}{% D
+  \def\board@val@labelrightfont{#1}}
+
+\define@key[UFCB]{gloset}{labelrightfont}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labelrightfont=#1}{}}
+
+\define@key[UFCB]{locset}{labeltopfont}{% D
+  \def\board@val@labeltopfont{#1}}
+
+\define@key[UFCB]{gloset}{labeltopfont}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labeltopfont=#1}{}}
+
+\define@key[UFCB]{locset}{labelbottomfont}{% D
+  \def\board@val@labelbottomfont{#1}}
+
+\define@key[UFCB]{gloset}{labelbottomfont}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labelbottomfont=#1}{}}
+
+\define@key[UFCB]{locset}{hlabelfont}{% D
+    \board@do@setsinglekeys*[UFCB]{locset}{labelleftfont=#1, labelrightfont=#1}}
+
+\define@key[UFCB]{gloset}{hlabelfont}{% D
+    \board@do@setsinglekeys*[UFCB]{gloset}{labelleftfont=#1, labelrightfont=#1}}%
+
+\define@key[UFCB]{locset}{vlabelfont}{% D
+    \board@do@setsinglekeys*[UFCB]{locset}{labeltopfont=#1, labelbottomfont=#1}}%
+
+\define@key[UFCB]{gloset}{vlabelfont}{% D
+    \board@do@setsinglekeys*[UFCB]{gloset}{labeltopfont=#1, labelbottomfont=#1}}%
+
+\define@key[UFCB]{locset}{labelfont}{% D
+    \board@do@setsinglekeys*[UFCB]{locset}{%
+      labelleftfont=#1, labelrightfont=#1, labeltopfont=#1, labelbottomfont=#1}}%
+
+\define@key[UFCB]{gloset}{labelfont}{% D
+    \board@do@setsinglekeys*[UFCB]{gloset}{labelleftfont=#1, labelrightfont=#1, labeltopfont=#1, labelbottomfont=#1}}%
+
+%%fontsize
+
+\define@key[UFCB]{locset}{labelfontsize}{% D
+  \def\cfss@sidefontsize{#1}}%
+
+\define@key[UFCB]{gloset}{labelfontsize}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labelfontsize=#1}{}}%
+
+%% formatting
+
+\define@key[UFCB]{locset}{labelleftformat}{% D
+  \def\board@val@labelleftformat{#1}}%
+
+\define@key[UFCB]{gloset}{labelleftformat}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labelleftformat={#1}}{}}%
+
+\define@key[UFCB]{locset}{labelrightformat}{% D
+  \def\board@val@labelrightformat{#1}}%
+
+\define@key[UFCB]{gloset}{labelrightformat}{%D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labelrightformat={#1}}{}}%
+
+\define@key[UFCB]{locset}{labeltopformat}{% D
+  \def\board@val@labeltopformat{#1}}%
+
+\define@key[UFCB]{gloset}{labeltopformat}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labeltopformat={#1}}{}}%
+
+\define@key[UFCB]{locset}{labelbottomformat}{% D
+  \def\board@val@labelbottomformat{#1}}%
+
+\define@key[UFCB]{gloset}{labelbottomformat}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,labelbottomformat={#1}}{}}%
+
+\define@key[UFCB]{locset}{hlabelformat}{% D
+    \board@do@setsinglekeys*[UFCB]{locset}{labelleftformat=#1, labelrightformat=#1}}%
+
+\define@key[UFCB]{gloset}{hlabelformat}{% D
+    \board@do@setsinglekeys*[UFCB]{gloset}{labelleftformat={#1}, labelrightformat={#1}}}%
+
+\define@key[UFCB]{locset}{vlabelformat}{% D
+    \board@do@setsinglekeys*[UFCB]{locset}{labeltopformat=#1, labelbottomformat=#1}}%
+
+\define@key[UFCB]{gloset}{vlabelformat}{% D
+    \board@do@setsinglekeys*[UFCB]{gloset}{labeltopformat={#1}, labelbottomformat={#1}}}%
+
+\define@key[UFCB]{locset}{labelformat}{% D
+    \board@do@setsinglekeys*[UFCB]{locset}{%
+     labelleftformat=#1, labelrightformat=#1, labeltopformat=#1, labelbottomformat=#1}}%
+
+\define@key[UFCB]{gloset}{labelformat}{% D
+    \board@do@setsinglekeys*[UFCB]{gloset}{%
+     labelleftformat={#1}, labelrightformat={#1}, labeltopformat={#1}, labelbottomformat={#1}}}%
+
+%%%
+%% Board sizes
+%%%
+
+\define@key[UFCB]{locset}{tinyboard}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{fontsize=10pt, labelfontsize=6pt}}%
+
+\define@key[UFCB]{gloset}{tinyboard}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{gloset}{fontsize=10pt, labelfontsize=6pt}}%
+
+\define@key[UFCB]{locset}{smallboard}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{fontsize=15pt, labelfontsize=8pt}}%
+
+\define@key[UFCB]{gloset}{smallboard}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{gloset}{fontsize=15pt, labelfontsize=8pt}}%
+
+\define@key[UFCB]{locset}{normalboard}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{fontsize=20pt, labelfontsize=10pt}}%
+
+\define@key[UFCB]{gloset}{normalboard}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{gloset}{fontsize=20pt, labelfontsize=10pt}}%
+
+\define@key[UFCB]{locset}{largeboard}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{locset}{fontsize=30pt, labelfontsize=12pt}}%
+
+\define@key[UFCB]{gloset}{largeboard}[true]{% D
+  \board@do@setsinglekeys*[UFCB]{gloset}{fontsize=30pt, labelfontsize=12pt}}%
+
+%%% coloring the font layer
+\define@key[UFCB]{locfill}{clearfontcolors}[true]{% D
+  \def\board@val@fontcolorstack{}}
+
+\define@key[UFCB]{glofill}{clearfontcolors}[true]{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,clearfontcolors=#1}{}}%
+
+\define@key[UFCB]{locfill}{whitefieldmaskcolor}{% D
+ \board@do@l@addto@macro\board@val@fontcolorstack
+  {\def\cfss@whitefieldmaskcolor{\color{#1}}}}
+
+\define@key[UFCB]{glofill}{whitefieldmaskcolor}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,whitefieldmaskcolor=#1}{}}%
+
+\define@key[UFCB]{locfill}{blackfieldmaskcolor}{% D
+  \board@do@l@addto@macro\board@val@fontcolorstack
+  {\def\cfss@blackfieldmaskcolor{\color{#1}}}}
+
+\define@key[UFCB]{glofill}{blackfieldmaskcolor}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,blackfieldmaskcolor=#1}{}}%
+
+\define@key[UFCB]{locfill}{fieldmaskcolor}{% D
+ \board@do@setsinglekeys*[UFCB]{locfill}{%
+  whitefieldmaskcolor=#1,
+  blackfieldmaskcolor=#1}}
+
+\define@key[UFCB]{glofill}{fieldmaskcolor}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,fieldmaskcolor=#1}{}}%
+
+\define@key[UFCB]{locfill}{whitefieldcolor}{% D
+  \board@do@l@addto@macro\board@val@fontcolorstack
+  {\def\cfss@whitefieldcolor{\color{#1}}}}
+
+\define@key[UFCB]{glofill}{whitefieldcolor}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,whitefieldcolor=#1}{}}%
+
+\define@key[UFCB]{locfill}{blackfieldcolor}{% D
+  \board@do@l@addto@macro\board@val@fontcolorstack
+  {\def\cfss@blackfieldcolor{\color{#1}}}}
+
+\define@key[UFCB]{glofill}{blackfieldcolor}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,blackfieldcolor=#1}{}}%
+
+\define@key[UFCB]{locfill}{fieldcolor}{% D
+  \board@do@setsinglekeys*[UFCB]{locfill}{%
+   whitefieldcolor=#1,
+   blackfieldcolor=#1}}
+
+\define@key[UFCB]{glofill}{fieldcolor}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,fieldcolor=#1}{}}%
+
+\define@key[UFCB]{locfill}{whiteonwhitepiecemaskcolor}{% D
+  \board@do@l@addto@macro\board@val@fontcolorstack
+  {\def\cfss@whiteonwhitepiecemaskcolor{\color{#1}}}}
+
+\define@key[UFCB]{glofill}{whiteonwhitepiecemaskcolor}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,whiteonwhitepiecemaskcolor=#1}{}}%
+
+\define@key[UFCB]{locfill}{whiteonblackpiecemaskcolor}{% D
+  \board@do@l@addto@macro\board@val@fontcolorstack
+  {\def\cfss@whiteonblackpiecemaskcolor{\color{#1}}}}
+
+\define@key[UFCB]{glofill}{whiteonblackpiecemaskcolor}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,whiteonblackpiecemaskcolor=#1}{}}%
+
+\define@key[UFCB]{locfill}{blackonwhitepiecemaskcolor}{% D
+  \board@do@l@addto@macro\board@val@fontcolorstack
+  {\def\cfss@blackonwhitepiecemaskcolor{\color{#1}}}}
+
+\define@key[UFCB]{glofill}{blackonwhitepiecemaskcolor}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,blackonwhitepiecemaskcolor=#1}{}}%
+
+\define@key[UFCB]{locfill}{blackonblackpiecemaskcolor}{% D
+  \board@do@l@addto@macro\board@val@fontcolorstack
+  {\def\cfss@blackonblackpiecemaskcolor{\color{#1}}}}
+
+\define@key[UFCB]{glofill}{blackonblackpiecemaskcolor}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,blackonblackpiecemaskcolor=#1}{}}%
+
+\define@key[UFCB]{locfill}{whitepiecemaskcolor}{% D
+  \board@do@setsinglekeys*[UFCB]{locfill}{%
+   whiteonwhitepiecemaskcolor=#1,
+   whiteonblackpiecemaskcolor=#1}}
+
+\define@key[UFCB]{glofill}{whitepiecemaskcolor}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,whitepiecemaskcolor=#1}{}}%
+
+\define@key[UFCB]{locfill}{blackpiecemaskcolor}{% D
+  \board@do@setsinglekeys*[UFCB]{locfill}{%
+   blackonwhitepiecemaskcolor=#1,
+   blackonblackpiecemaskcolor=#1}}
+
+\define@key[UFCB]{glofill}{blackpiecemaskcolor}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,blackpiecemaskcolor=#1}{}}%
+
+\define@key[UFCB]{locfill}{onwhitepiecemaskcolor}{% D
+  \board@do@setsinglekeys*[UFCB]{locfill}{%
+   whiteonwhitepiecemaskcolor=#1,
+   blackonwhitepiecemaskcolor=#1}}
+
+\define@key[UFCB]{glofill}{onwhitepiecemaskcolor}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,onwhitepiecemaskcolor=#1}{}}%
+
+\define@key[UFCB]{locfill}{onblackpiecemaskcolor}{% D
+  \board@do@setsinglekeys*[UFCB]{locfill}{%
+   whiteonblackpiecemaskcolor=#1,
+   blackonblackpiecemaskcolor=#1}}
+
+\define@key[UFCB]{glofill}{onblackpiecemaskcolor}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,onblackpiecemaskcolor=#1}{}}%
+
+\define@key[UFCB]{locfill}{piecemaskcolor}{% D
+  \board@do@setsinglekeys*[UFCB]{locfill}{%
+   whiteonwhitepiecemaskcolor=#1,
+   whiteonblackpiecemaskcolor=#1,
+   blackonwhitepiecemaskcolor=#1,
+   blackonblackpiecemaskcolor=#1}}
+
+\define@key[UFCB]{glofill}{piecemaskcolor}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,piecemaskcolor=#1}{}}%
+
+\define@key[UFCB]{locfill}{whitepiececolor}{% D
+ \board@do@l@addto@macro\board@val@fontcolorstack
+  {\def\cfss@whitepiececolor{\color{#1}}}}
+
+\define@key[UFCB]{glofill}{whitepiececolor}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,whitepiececolor=#1}{}}%
+
+\define@key[UFCB]{locfill}{blackpiececolor}{% D
+ \board@do@l@addto@macro\board@val@fontcolorstack
+  {\def\cfss@blackpiececolor{\color{#1}}}}
+
+\define@key[UFCB]{glofill}{blackpiececolor}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,blackpiececolor=#1}{}}%
+
+\define@key[UFCB]{locfill}{piececolor}{% D
+  \board@do@setsinglekeys*[UFCB]{locfill}{%
+   whitepiececolor=#1,
+   blackpiececolor=#1}}
+
+\define@key[UFCB]{glofill}{piececolor}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,piececolor=#1}{}}%
+
+%% Obsolete + changed, use whitepiececolor
+\define@key[UFCB]{locfill}{colorwhite}{% D
+ \board@do@l@addto@macro\board@val@fontcolorstack
+  {\def\cfss@whitepiececolor{\color{#1}}}}
+
+\define@key[UFCB]{glofill}{colorwhite}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,colorwhite=#1}{}}%
+
+\define@key[UFCB]{locfill}{colorblack}{% D
+ \board@do@l@addto@macro\board@val@fontcolorstack
+  {\def\cfss@blackpiececolor{\color{#1}}}}
+
+\define@key[UFCB]{glofill}{colorblack}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,colorblack=#1}{}}%
+
+%% end obsolete
+
+%% setting board colors
+\define@key[UFCB]{locfill}{setfontcolors}[true]{% D
+ \let\board@val@boardfontcolors\board@val@fontcolorstack}
+
+\define@key[UFCB]{glofill}{setfontcolors}[true]{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,setfontcolors=#1}{}}%
+
+\define@key[UFCB]{locfill}{addfontcolors}[true]{% D
+  \toks@=\expandafter{\board@val@fontcolorstack}%
+  \edef\@@next{\noexpand\board@do@l@addto@macro\noexpand\board@val@boardfontcolors{\the\toks@}}%
+  \@@next}
+
+\define@key[UFCB]{glofill}{setfontcolors}[true]{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,setfontcolors=#1}{}}%
+
+%% color in areas.
+
+
+%%% enable postscript units and node
+\define@boolkey[UFCB]{locset}{psset}[true]{}% D
+
+\define@boolkey[UFCB]{gloset}{psset}[true]{% D
+   \board@do@l@addto@macro\board@val@savedkeylist{,psset=#1}{}}%
+
+%%% redefines some skak commands/skak counters
+\define@boolkey[UFCB]{locset}{psskak}[true]{}% D
+
+\define@boolkey[UFCB]{gloset}{psskak}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,psskak=#1}{}}%
+
+%%%%%%
+%% "fill"-Keys that can be used more than once
+%%%%%%
+
+%%%%
+%% language
+%%%%
+
+\define@key[UFCB]{locfill}{language}{% D
+    \edef\board@val@curlang{#1}}%
+
+\define@key[UFCB]{glofill}{language}{% D
+ \board@do@l@addto@macro\board@val@savedkeylist{,language=#1}}%
+
+%%%%
+%% clearing
+%%%%
+
+\define@key[UFCB]{locfill}{cleararea}{% D
+ \edef\board@temp@list{#1}%
+ \@for\board@temp@curarea:=\board@temp@list\do
+  {\board@do@cleararea{\board@temp@curarea}}}%
+
+\define@key[UFCB]{glofill}{cleararea}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,cleararea=#1}}%
+
+\define@key[UFCB]{locfill}{clearareas}{% D
+  \edef\board@temp@list{#1}%
+ \@for\board@temp@curarea:=\board@temp@list\do
+  {\board@do@cleararea{\board@temp@curarea}}}%
+
+\define@key[UFCB]{glofill}{clearareas}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,clearareas=#1}}%
+
+\define@key[UFCB]{locfill}{clearboard}[true]{%D
+   \edef\board@temp@curstartfield{\board@val@minfilechar\board@val@maxranknum}%
+   \edef\board@temp@curstopfield{\board@val@maxfilechar\board@val@minranknum}%
+   \board@do@setsinglekeys*[UFCB]{locfill}{cleararea=\board@temp@curstartfield-\board@temp@curstopfield}}%
+
+\define@key[UFCB]{glofill}{clearboard}[true]{%D
+   \board@do@l@addto@macro\board@val@savedkeylist{,clearboard=#1}}%
+
+\define@key[UFCB]{locfill}{clearrank}{%D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@currank:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@val@minfilechar\board@temp@currank}%
+    \edef\board@temp@curstopfield{\board@val@maxfilechar\board@temp@currank}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+      cleararea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{clearrank}{%D
+  \board@do@l@addto@macro\board@val@savedkeylist{,clearrank={#1}}}%
+
+\define@key[UFCB]{locfill}{clearranks}{%D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@currank:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@val@minfilechar\board@temp@currank}%
+    \edef\board@temp@curstopfield{\board@val@maxfilechar\board@temp@currank}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+      cleararea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{clearranks}{%D
+  \board@do@l@addto@macro\board@val@savedkeylist{,clearranks={#1}}}%
+
+\define@key[UFCB]{locfill}{clearfile}{%D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfile:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@temp@curfile\board@val@maxranknum}%
+    \edef\board@temp@curstopfield{\board@temp@curfile\board@val@minranknum}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+      cleararea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{clearfile}{%D
+  \board@do@l@addto@macro\board@val@savedkeylist{,clearfile={#1}}}%
+
+\define@key[UFCB]{locfill}{clearfiles}{%D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfile:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@temp@curfile\board@val@maxranknum}%
+    \edef\board@temp@curstopfield{\board@temp@curfile\board@val@minranknum}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+      cleararea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{clearfiles}{%D
+  \board@do@l@addto@macro\board@val@savedkeylist{,clearfiles={#1}}}%
+
+\define@key[UFCB]{locfill}{clearfield}{% #1=list of fields %D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfield:=\board@temp@list\do
+    {\board@do@setsinglekeys*[UFCB]{locfill}{cleararea=\board@temp@curfield-\board@temp@curfield}}}%
+
+\define@key[UFCB]{glofill}{clearfield}{% %D
+    \board@do@l@addto@macro\board@val@savedkeylist{,clearfield={#1}}}%
+
+\define@key[UFCB]{locfill}{clearfields}{% #1=list of fields %D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfield:=\board@temp@list\do
+    {\board@do@setsinglekeys*[UFCB]{locfill}{cleararea=\board@temp@curfield-\board@temp@curfield}}}%
+
+\define@key[UFCB]{glofill}{clearfields}{% %D
+    \board@do@l@addto@macro\board@val@savedkeylist{,clearfields={#1}}}%
+
+%%%%
+%% hiding
+%%%%
+
+\define@key[UFCB]{locfill}{hidearea}{% D
+  \board@do@hidearea{#1}}%
+
+\define@key[UFCB]{glofill}{hidearea}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,hidearea=#1}}%
+
+\define@key[UFCB]{locfill}{hideareas}{% D
+  \edef\board@temp@list{#1}%
+ \@for\board@temp@curarea:=\board@temp@list\do
+  {\board@do@hidearea{\board@temp@curarea}}}%
+
+\define@key[UFCB]{glofill}{hideareas}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,hideareas=#1}}%
+
+\define@key[UFCB]{locfill}{hideboard}[true]{% D
+   \edef\board@temp@curstartfield{\board@val@minfilechar\board@val@maxranknum}%
+   \edef\board@temp@curstopfield{\board@val@maxfilechar\board@val@minranknum}%
+   \board@do@setsinglekeys*[UFCB]{locfill}{hidearea=\board@temp@curstartfield-\board@temp@curstopfield}}%
+
+\define@key[UFCB]{glofill}{hideboard}[true]{% D
+   \board@do@l@addto@macro\board@val@savedkeylist{,hideboard=#1}}%
+
+\define@key[UFCB]{locfill}{hiderank}{% D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@currank:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@val@minfilechar\board@temp@currank}%
+    \edef\board@temp@curstopfield{\board@val@maxfilechar\board@temp@currank}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+     hidearea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{hiderank}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,hiderank={#1}}}%
+
+\define@key[UFCB]{locfill}{hideranks}{% D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@currank:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@val@minfilechar\board@temp@currank}%
+    \edef\board@temp@curstopfield{\board@val@maxfilechar\board@temp@currank}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+     hidearea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{hideranks}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,hideranks={#1}}}%
+
+\define@key[UFCB]{locfill}{hidefile}{% D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfile:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@temp@curfile\board@val@maxranknum}%
+    \edef\board@temp@curstopfield{\board@temp@curfile\board@val@minranknum}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+     hidearea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{hidefile}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,hidefile={#1}}}%
+
+\define@key[UFCB]{locfill}{hidefiles}{% D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfile:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@temp@curfile\board@val@maxranknum}%
+    \edef\board@temp@curstopfield{\board@temp@curfile\board@val@minranknum}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+     hidearea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{hidefiles}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,hidefiles={#1}}}%
+
+\define@key[UFCB]{locfill}{hidefields}{% D #1=list of fields
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfield:=\board@temp@list\do
+    {\board@do@setsinglekeys*[UFCB]{locfill}{hidearea=\board@temp@curfield-\board@temp@curfield}}}%
+
+\define@key[UFCB]{glofill}{hidefields}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,hidefields={#1}}}%
+
+\define@key[UFCB]{locfill}{hidefield}{% D #1=list of fields
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfield:=\board@temp@list\do
+    {\board@do@setsinglekeys*[UFCB]{locfill}{hidearea=\board@temp@curfield-\board@temp@curfield}}}%
+
+\define@key[UFCB]{glofill}{hidefield}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,hidefield={#1}}}%
+
+\define@key[UFCB]{locfill}{hidepiece}{% D list of chars
+  \board@do@hidetypelist{#1}}%
+
+\define@key[UFCB]{glofill}{hidepiece}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,hidepiece={#1}}}%
+
+\define@key[UFCB]{locfill}{hidepieces}{% D list of chars
+  \board@do@hidetypelist{#1}}%
+
+\define@key[UFCB]{glofill}{hidepieces}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,hidepieces={#1}}}%
+
+\define@key[UFCB]{locfill}{hidewhite}[true]{% D
+   \edef\board@temp@list{%
+    \csname board@\board@val@game @whitepiececharlist\endcsname}%
+    \board@do@hidetypelist{\board@temp@list}}%
+
+\define@key[UFCB]{glofill}{hidewhite}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,hidewhite=#1}}%
+
+\define@key[UFCB]{locfill}{hideblack}[true]{% D
+   \edef\board@temp@list{%
+    \csname board@\board@val@game @blackpiececharlist\endcsname}%
+    \board@do@hidetypelist{\board@temp@list}}%
+
+\define@key[UFCB]{glofill}{hideblack}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,hideblack=#1}}%
+
+\define@key[UFCB]{locfill}{hideall}[true]{% D
+  \edef\board@temp@list{%
+   \csname board@\board@val@game @piececharlist\endcsname}%
+   \board@do@hidetypelist{\board@temp@list}}%
+
+\define@key[UFCB]{glofill}{hideall}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,hideall=#1}}%
+
+%%%%
+%% show
+%%%%
+
+\define@key[UFCB]{locfill}{showarea}{%
+  \board@do@showarea{#1}}%
+
+\define@key[UFCB]{glofill}{showarea}{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,showarea=#1}}%
+
+\define@key[UFCB]{locfill}{showareas}{% D
+  \edef\board@temp@list{#1}%
+ \@for\board@temp@curarea:=\board@temp@list\do
+  {\board@do@showarea{\board@temp@curarea}}}%
+
+\define@key[UFCB]{glofill}{showareas}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,showareas=#1}}%
+
+\define@key[UFCB]{locfill}{showboard}[true]{%
+  \edef\board@temp@curstartfield{\board@val@minfilechar\board@val@maxranknum}%
+  \edef\board@temp@curstopfield{\board@val@maxfilechar\board@val@minranknum}%
+  \board@do@setsinglekeys*[UFCB]{locfill}{showarea=\board@temp@curstartfield-\board@temp@curstopfield}}%
+
+\define@key[UFCB]{glofill}{showboard}[true]{%
+   \board@do@l@addto@macro\board@val@savedkeylist{,showboard=#1}}%
+
+\define@key[UFCB]{locfill}{showrank}{%
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@currank:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@val@minfilechar\board@temp@currank}%
+    \edef\board@temp@curstopfield{\board@val@maxfilechar\board@temp@currank}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+      showarea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{showrank}{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,showrank={#1}}}%
+
+\define@key[UFCB]{locfill}{showranks}{%
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@currank:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@val@minfilechar\board@temp@currank}%
+    \edef\board@temp@curstopfield{\board@val@maxfilechar\board@temp@currank}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+      showarea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{showranks}{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,showranks={#1}}}%
+
+\define@key[UFCB]{locfill}{showfile}{%
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfile:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@temp@curfile\board@val@maxranknum}%
+    \edef\board@temp@curstopfield{\board@temp@curfile\board@val@minranknum}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+     showarea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{showfile}{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,showfile={#1}}}%
+
+\define@key[UFCB]{locfill}{showfiles}{%
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfile:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@temp@curfile\board@val@maxranknum}%
+    \edef\board@temp@curstopfield{\board@temp@curfile\board@val@minranknum}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+     showarea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{showfiles}{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,showfiles={#1}}}%
+
+\define@key[UFCB]{locfill}{showfield}{% #1=list of fields
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfield:=\board@temp@list\do
+    {\board@do@setsinglekeys*[UFCB]{locfill}{hidearea=\board@temp@curfield-\board@temp@curfield}}}%
+
+\define@key[UFCB]{glofill}{showfield}{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,showfield={#1}}}%
+
+\define@key[UFCB]{locfill}{showfields}{% #1=list of fields
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfield:=\board@temp@list\do
+    {\board@do@setsinglekeys*[UFCB]{locfill}{hidearea=\board@temp@curfield-\board@temp@curfield}}}%
+
+\define@key[UFCB]{glofill}{showfields}{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,showfields={#1}}}%
+
+\define@key[UFCB]{locfill}{showpiece}{% list of chars
+  \board@do@showtypelist{#1}}%
+
+\define@key[UFCB]{glofill}{showpiece}{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,showpieces={#1}}}%
+
+\define@key[UFCB]{locfill}{showpieces}{% list of chars
+  \board@do@showtypelist{#1}}%
+
+\define@key[UFCB]{glofill}{showpieces}{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,showpieces={#1}}}%
+
+%%%%
+%% fen
+%%%%
+%%% fen "corners
+
+\define@key[UFCB]{locfill}{startfen}{% D
+  \expandafter\board@split@field#1ARGEND%
+  \let\board@val@startfenfilechar\board@temp@curfilechar
+  \let\board@val@startfenfilenum\board@temp@curfilenum
+  \let\board@val@startfenranknum\board@temp@curranknum}%
+
+\define@key[UFCB]{glofill}{startfen}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,startfen=#1}}%
+
+\define@key[UFCB]{locfill}{startfill}{% D
+  \expandafter\board@split@field#1ARGEND%
+  \let\board@val@startfillfilechar\board@temp@curfilechar
+  \let\board@val@startfillfilenum\board@temp@curfilenum
+  \let\board@val@startfillranknum\board@temp@curranknum}%
+
+\define@key[UFCB]{glofill}{startfill}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,startfill=#1}}%
+
+\define@key[UFCB]{locfill}{stopfill}{% D
+  \expandafter\board@split@field#1ARGEND%
+  \let\board@val@stopfillfilechar\board@temp@curfilechar
+  \let\board@val@stopfillfilenum\board@temp@curfilenum
+  \let\board@val@stopfillranknum\board@temp@curranknum}%
+
+\define@key[UFCB]{glofill}{stopfill}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,startfill=#1}}%
+
+\define@key[UFCB]{locfill}{fillarea}{% a7-f1 %D
+    \expandafter\board@split@areasort#1ARGEND%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+      startfill=\board@temp@curstartfield, stopfill=\board@temp@curstopfield}}%
+
+\define@key[UFCB]{glofill}{fillarea}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,fillarea=#1}}%
+
+%%%
+%% setting pieces with fen
+%%%
+
+\define@key[UFCB]{locfill}{@fen}{%
+   \board@split@fen#1 X X X X X X XARGEND%
+   \board@scan@fen{\board@val@position}}%
+
+\def\board@setfenkey#1|{\board@do@setsinglekeys*[UFCB]{locfill}{@fen=#1}}%
+
+%%change 1.5
+\define@key[UFCB]{locfill}{setfen}{% D
+    \board@do@setsinglekeys*[UFCB]{locfill}{clearboard}%
+    \edef\board@temp@fen{#1}%
+    \expandafter\board@setfenkey\board@temp@fen|}%
+
+\define@key[UFCB]{glofill}{setfen}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,setfen=#1}}%
+
+\define@key[UFCB]{locfill}{addfen}{% D
+    \expandafter\board@setfenkey#1|}%
+
+\define@key[UFCB]{glofill}{addfen}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,addfen=#1}}%
+
+%%% other name for usefen
+\define@key[UFCB]{locfill}{restorefen}{% D
+   \edef\board@temp@curfen{\csname chessgame.#1\endcsname}%
+   \board@do@setsinglekeys*[UFCB]{locfill}{language=english, addfen=\board@temp@curfen, language=\board@val@savelang}}%
+
+\define@key[UFCB]{glofill}{restorefen}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,restorefen=#1}}%cor 1.5.
+
+\define@key[UFCB]{locfill}{loadfen}{% D
+   \board@do@loadfen{#1}%
+   \board@do@setsinglekeys*[UFCB]{locfill}{language=english, addfen=\board@temp@curfen, language=\board@val@savelang}}%
+
+\define@key[UFCB]{glofill}{loadfen}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,loadfen=#1}}%
+
+%%%%
+%% rest of fen
+%%%%
+
+\define@key[UFCB]{locfill}{mover}{\def\board@val@mover{#1}} %D %changed 02.08.2007 to allow commands as input
+\define@key[UFCB]{locfill}{castling}{\def\board@val@castling{#1}} %D
+\define@key[UFCB]{locfill}{enpassant}{\def\board@val@enpassant{#1}} %D
+\define@key[UFCB]{locfill}{halfmove}{\def\board@val@halfmove{#1}}  %D
+\define@key[UFCB]{locfill}{fullmove}{\def\board@val@fullmove{#1}} %D
+
+\define@key[UFCB]{glofill}{mover}{\board@do@l@addto@macro\board@val@savedkeylist{,mover=#1}} %D
+\define@key[UFCB]{glofill}{castling}{\board@do@l@addto@macro\board@val@savedkeylist{,castling=#1}} %D
+\define@key[UFCB]{glofill}{enpassant}{\board@do@l@addto@macro\board@val@savedkeylist{,enpassant=#1}} %D
+\define@key[UFCB]{glofill}{halfmove}{\board@do@l@addto@macro\board@val@savedkeylist{,halfmove=#1}} %D
+\define@key[UFCB]{glofill}{fullmove}{\board@do@l@addto@macro\board@val@savedkeylist{,fullmove=#1}} %D
+
+%%% saving fen
+
+\define@key[UFCB]{locfill}{storefen}{% D
+  \board@do@storefen{#1}}% D
+
+\define@key[UFCB]{glofill}{storefen}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,storefen=#1}}%
+
+\define@key[UFCB]{locfill}{savefen}{\board@do@savefen{#1}} %D
+
+\define@key[UFCB]{glofill}{savefen}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,savefen=#1}}%
+
+\define@key[UFCB]{locfill}{startstore}{% D
+  \expandafter\board@split@field#1ARGEND%
+  \let\board@val@startstorefilechar\board@temp@curfilechar
+  \let\board@val@startstorefilenum\board@temp@curfilenum
+  \let\board@val@startstoreranknum\board@temp@curranknum%
+  }%
+
+\define@key[UFCB]{glofill}{startstore}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,startstore=#1}}%
+
+\define@key[UFCB]{locfill}{stopstore}{% D
+  \expandafter\board@split@field#1ARGEND%
+  \let\board@val@stopstorefilechar\board@temp@curfilechar
+  \let\board@val@stopstorefilenum\board@temp@curfilenum
+  \let\board@val@stopstoreranknum\board@temp@curranknum}%
+
+\define@key[UFCB]{glofill}{stopstore}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,stopstore=#1}}%
+
+\define@key[UFCB]{locfill}{storearea}{% a7-f1 %D
+  \expandafter\board@split@areasort#1ARGEND%
+  \board@do@setsinglekeys*[UFCB]{locfill}{%
+    startstore=\board@temp@curstartfield, stopstore=\board@temp@curstopfield}}%
+
+\define@key[UFCB]{glofill}{storearea}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,storearea=#1}}%
+
+%%%%%%
+%%% Adding pieces
+%%%%%%
+
+\define@key[UFCB]{locfill}{setpieces}{% D
+    \board@do@setsinglekeys*[UFCB]{locfill}{clearboard=true}%
+    \board@do@addpieces{#1}}%
+
+\define@key[UFCB]{glofill}{setpieces}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,setpieces={#1}}}%
+
+\define@key[UFCB]{locfill}{addpieces}{% D
+    \board@do@addpieces{#1}}%
+
+\define@key[UFCB]{glofill}{addpieces}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,addpieces={{#1}}}}%
+
+\define@key[UFCB]{locfill}{setwhite}{% D
+  \board@do@setsinglekeys*[UFCB]{locfill}{clearboard=true}%
+  \board@do@addwhitepieces{#1}}%
+
+\define@key[UFCB]{glofill}{setwhite}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,setwhite={#1}}}%
+
+\define@key[UFCB]{locfill}{addwhite}{% D
+     \board@do@addwhitepieces{#1}}%
+
+\define@key[UFCB]{glofill}{addwhite}{% D
+     \board@do@l@addto@macro\board@val@savedkeylist{,addwhite={#1}}}%
+
+\define@key[UFCB]{locfill}{setblack}{% D
+     \board@do@setsinglekeys*[UFCB]{locfill}{clearboard=true}%
+     \board@do@addblackpieces{#1}}%
+
+\define@key[UFCB]{glofill}{setblack}{% D
+     \board@do@l@addto@macro\board@val@savedkeylist{,setblack={#1}}}%
+
+\define@key[UFCB]{locfill}{addblack}{% D
+     \board@do@addblackpieces{#1}}%
+
+\define@key[UFCB]{glofill}{addblack}{% D
+     \board@do@l@addto@macro\board@val@savedkeylist{,addblack={#1}}}%
+
+%% getting field lists for piece types
+\define@key[UFCB]{locfill}{getpiecelists}[true]{% D
+  \board@do@getpiecelists}
+
+\define@key[UFCB]{glofill}{getpiecelists}[true]{% D
+     \board@do@l@addto@macro\board@val@savedkeylist{,getpiecelists={#1}}}%
+
+
+%%\define@key[UFCB]{main}{fontsize}{\setboardfontsize{#1}}%
+
+%% "emphazing"
+
+\define@boolkey[UFCB]{locfill}{coloremph}[true]{}
+
+\define@boolkey[UFCB]{glofill}{coloremph}[true]{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,coloremph={#1}}}%
+
+\define@key[UFCB]{locfill}{emphstyle}{% D
+ \def\board@val@pieceemph{#1}}%
+
+\define@key[UFCB]{glofill}{emphstyle}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,emphstyle={#1}}}%
+
+\define@key[UFCB]{locfill}{coloremphstyle}[\relax]{% D
+ \board@do@setsinglekeys*[UFCB]{locfill}{coloremph}%
+ \def\board@val@pieceemph{#1}}%
+
+\define@key[UFCB]{glofill}{coloremphstyle}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,coloremphstyle={#1}}}%
+
+\define@key[UFCB]{locfill}{empharea}{% D
+  \board@do@empharea{#1}}%
+
+\define@key[UFCB]{glofill}{empharea}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,empharea=#1}}%
+
+\define@key[UFCB]{locfill}{emphareas}{% D
+ \XKV@sp@deflist\board@templist{#1}%
+ \edef\board@templist{\board@templist}%
+ \@for\board@temp@curarea:=\board@templist\do
+  {\ifx\board@temp@curarea\@empty\else
+   \board@do@empharea{\board@temp@curarea}%
+   \fi}}%
+
+\define@key[UFCB]{glofill}{emphareas}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,emphareas={#1}}}%
+
+\define@key[UFCB]{locfill}{emphboard}[true]{%D
+   \edef\board@temp@curstartfield{\board@val@minfilechar\board@val@maxranknum}%
+   \edef\board@temp@curstopfield{\board@val@maxfilechar\board@val@minranknum}%
+   \board@do@setsinglekeys*[UFCB]{locfill}{empharea=\board@temp@curstartfield-\board@temp@curstopfield}}%
+
+\define@key[UFCB]{glofill}{emphboard}[true]{%D
+   \board@do@l@addto@macro\board@val@savedkeylist{,emphboard=#1}}%
+
+\define@key[UFCB]{locfill}{emphranks}{%D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@currank:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@val@minfilechar\board@temp@currank}%
+    \edef\board@temp@curstopfield{\board@val@maxfilechar\board@temp@currank}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+      empharea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{emphranks}{%D
+  \board@do@l@addto@macro\board@val@savedkeylist{,emphranks={#1}}}%
+
+\define@key[UFCB]{locfill}{emphrank}{% D
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+      emphranks=#1}}%
+
+\define@key[UFCB]{glofill}{emphrank}{%D
+  \board@do@l@addto@macro\board@val@savedkeylist{,emphrank={#1}}}%
+
+\define@key[UFCB]{locfill}{emphfiles}{%D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfile:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@temp@curfile\board@val@maxranknum}%
+    \edef\board@temp@curstopfield{\board@temp@curfile\board@val@minranknum}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+      empharea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{emphfiles}{%D
+  \board@do@l@addto@macro\board@val@savedkeylist{,emphfiles={#1}}}%
+
+\define@key[UFCB]{locfill}{emphfile}{% D
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+      emphfiles=#1}}%
+
+\define@key[UFCB]{glofill}{emphfile}{%D
+  \board@do@l@addto@macro\board@val@savedkeylist{,emphfile=#1}}%
+
+\define@key[UFCB]{locfill}{emphfields}{% D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfield:=\board@temp@list\do
+   {\expandafter\board@split@field\board@temp@curfield ARGEND%
+    \board@do@store@pieceemph{\board@temp@curfilenum}{\board@temp@curranknum}}}%
+
+\define@key[UFCB]{glofill}{emphfields}{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,emphpieces={#1}}}%
+
+\define@key[UFCB]{locfill}{emphfield}{% D
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+      emphfields=#1}}%
+
+\define@key[UFCB]{glofill}{emphfield}{%D
+  \board@do@l@addto@macro\board@val@savedkeylist{,emphfield=#1}}%
+
+\define@key[UFCB]{locfill}{colorpieces}{% D
+  \PackageWarning{chessboard}{The key colorpieces doesn't work anymore. \MessageBreak
+  Use the emph-keys instead.}}%
+\define@key[UFCB]{glofill}{colorpieces}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,colorpieces={#1}}}%
+
+%%%%%%%%%%%%%%%
+%% setting the game
+%%%%%%%%%%%%%%%
+
+\define@key[UFCB]{locinit}{game}{%
+    \def\board@val@game{#1}}%
+
+\define@key[UFCB]{gloinit}{game}{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,game=#1}{}}%
+
+
+%</chessboard-keys-main>
+%<*chessboard-keys-pgf>
+\ProvidesFile{chessboard-keys-pgf.sty}[2019/06/23 version v1.8 key definitions for chessboard.sty]
+%%$Date: 2011/03/17 13:42:38 $$Version: e7ec1b100ede $
+
+%% new 1.5.: style keys for curvemove
+\define@key[UFCB]{bez}{x1}{\def\board@val@bezxi{#1}}
+\define@key[UFCB]{bez}{x2}{\def\board@val@bezxii{#1}}
+\define@key[UFCB]{bez}{y1}{\def\board@val@bezyi{#1}}
+\define@key[UFCB]{bez}{y2}{\def\board@val@bezyii{#1}}
+\define@key[UFCB]{bez}{linewidth}{\def\board@pgf@linewidth{#1}}
+\define@key[UFCB]{bez}{pgflinewidth}{\def\board@pgf@linewidth{#1}}
+\define@key[UFCB]{bez}{pgfshortenstart}{\def\board@pgf@shortenstart{#1}}
+\define@key[UFCB]{bez}{shortenstart}{\def\board@pgf@shortenstart{#1}}
+\define@key[UFCB]{bez}{pgfshortenend}{\def\board@pgf@shortenend{#1}}
+\define@key[UFCB]{bez}{shortenend}{\def\board@pgf@shortenend{#1}}
+\define@key[UFCB]{bez}{pgfarrow}{\def\board@pgf@arrow{#1}}
+\define@key[UFCB]{bez}{arrow}{\def\board@pgf@arrow{#1}}
+
+\define@boolkey[UFCB]{bez}{clockwise}[true]{%
+  \ifUFCB@bez@clockwise
+   \def\board@val@pgfsign{1}
+  \else
+   \def\board@val@pgfsign{-1}%
+  \fi}%
+\define@key[UFCB]{bez}{style}{%
+ \ifcsname board@pgf@curvemovestyle@#1\endcsname
+  \csname board@pgf@curvemovestyle@#1\endcsname
+ \else\PackageError{chessboard}{Style #1 not defined for curvemove}{}%
+ \fi}
+
+%% disable pgf-picture completely
+
+\define@boolkey[UFCB]{locset}{pgf}[true]{}% D
+
+\define@boolkey[UFCB]{gloset}{pgf}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,pgf=#1}{}}%
+
+%% clears the user "extra" pictures
+
+\define@key[UFCB]{locfill}{clearbackpgf}[true]{%
+  \let\board@pgf@extrabackground\@empty
+  }%
+
+\define@key[UFCB]{glofill}{clearbackpgf}[true]{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,clearbackpgf=#1}}%
+
+\define@key[UFCB]{locfill}{clearmarkpgf}[true]{%
+ \let\board@pgf@extramarkground\@empty
+  }%
+
+\define@key[UFCB]{glofill}{clearmarkpgf}[true]{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,clearmarkpgf=#1}}%
+
+\define@choicekey[UFCB]{locfill}{clearpgf}[\@tempval\@tempnr]{back,mark,all,both,none}[all]{% D
+ \ifcase\@tempnr\relax
+  \board@do@setsinglekeys*[UFCB]{locfill}{clearbackpgf}%
+ \or
+  \board@do@setsinglekeys*[UFCB]{locfill}{clearmarkpgf}%
+ \or
+  \board@do@setsinglekeys*[UFCB]{locfill}{clearbackpgf,clearmarkpgf}%
+ \or
+  \board@do@setsinglekeys*[UFCB]{locfill}{clearbackpgf,clearmarkpgf}%
+ \or
+  \board@do@setsinglekeys*[UFCB]{locfill}{}%
+ \fi}
+
+\define@key[UFCB]{glofill}{clearpgf}[all]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,clearpgf=#1}}%
+
+%% obsolete
+
+\define@key[UFCB]{locfill}{clearbackgroundpgf}[true]{%
+  \let\board@pgf@extrabackground\@empty}%
+
+\define@key[UFCB]{glofill}{clearbackgroundpgf}[true]{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,clearbackgroundpgf=#1}}%
+
+\define@key[UFCB]{locfill}{clearforegroundpgf}[true]{%
+  \let\board@pgf@extramarkground\@empty}%
+
+\define@key[UFCB]{glofill}{clearforegroundpgf}[true]{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,clearforegroundpgf=#1}}%
+
+%% to chose the affected picture
+
+\define@boolkey[UFCB]{locfill}{usemarkpgf}[true]{}
+
+\define@boolkey[UFCB]{glofill}{usemarkpgf}[true]{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,usemarkpgf=#1}}%
+
+\define@boolkey[UFCB]{locfill}{usebackpgf}[true]{}%
+
+\define@boolkey[UFCB]{glofill}{usebackpgf}[true]{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,usebackpgf=#1}}%
+
+\define@choicekey[UFCB]{locfill}{usepgf}[\@tempval\@tempnr]{back,mark,all,both,none}{%
+ \def\board@pgf@curusepgf{#1}%
+ \ifcase\@tempnr\relax
+  \board@do@setsinglekeys*[UFCB]{locfill}{usebackpgf=true,usemarkpgf=false}%
+ \or
+  \board@do@setsinglekeys*[UFCB]{locfill}{usemarkpgf=true,usebackpgf=false}%
+ \or
+  \board@do@setsinglekeys*[UFCB]{locfill}{usebackpgf=true,usemarkpgf=true}%
+ \or
+  \board@do@setsinglekeys*[UFCB]{locfill}{usebackpgf=true,usemarkpgf=true}%
+ \or
+  \board@do@setsinglekeys*[UFCB]{locfill}{usebackpgf=false,usemarkpgf=false}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{usepgf}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,usepgf=#1}}%
+
+
+\define@boolkey[UFCB]{locfill}{useonblack}[true]{%
+ \ifUFCB@locfill@useonblack
+   \board@pgf@addmarkground{\UFCB@locfill@useonblacktrue}%
+  \else
+   \board@pgf@addmarkground{\UFCB@locfill@useonblackfalse}%
+  \fi
+ \ifUFCB@locfill@useonblack
+   \board@pgf@addbackground{\UFCB@locfill@useonblacktrue}%
+  \else
+   \board@pgf@addbackground{\UFCB@locfill@useonblackfalse}%
+  \fi}%
+
+\define@boolkey[UFCB]{glofill}{useonblack}[true]{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,useonblack=#1}}%
+
+\define@boolkey[UFCB]{locfill}{useonwhite}[true]{%
+  \ifUFCB@locfill@useonwhite
+   \board@pgf@addmarkground{\UFCB@locfill@useonwhitetrue}%
+  \else
+   \board@pgf@addmarkground{\UFCB@locfill@useonwhitefalse}%
+  \fi
+  \ifUFCB@locfill@useonwhite
+   \board@pgf@addbackground{\UFCB@locfill@useonwhitetrue}%
+  \else
+   \board@pgf@addbackground{\UFCB@locfill@useonwhitefalse}%
+  \fi}%
+
+\define@boolkey[UFCB]{glofill}{useonwhite}[true]{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,useonwhite=#1}}%
+
+
+\define@choicekey[UFCB]{locfill}{trimtocolor}[\@tempval\@tempnr]{white,black,false}{% D
+ \def\board@pgf@curtrimtocolor{#1}%
+ \ifcase\@tempnr\relax
+  \board@do@setsinglekeys*[UFCB]{locfill}{useonwhite=true,useonblack=false}%
+ \or
+  \board@do@setsinglekeys*[UFCB]{locfill}{useonwhite=false,useonblack=true}%
+ \or
+  \board@do@setsinglekeys*[UFCB]{locfill}{useonwhite=true,useonblack=true}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{trimtocolor}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,trimtocolor=#1}}%
+
+\define@key[UFCB]{locfill}{trimtowhite}[true]{%
+  \board@do@setsinglekeys*[UFCB]{locfill}{useonwhite=true,useonblack=false}}%
+
+\define@key[UFCB]{glofill}{trimtowhite}[true]{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,trimtowhite=#1}}%
+
+\define@key[UFCB]{locfill}{trimtoblack}[true]{%
+  \board@do@setsinglekeys*[UFCB]{locfill}{useonwhite=false,useonblack=true}}%
+
+\define@key[UFCB]{glofill}{trimtoblack}[true]{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,trimtoblack=#1}}%
+
+\define@key[UFCB]{locfill}{starttrim}{%
+  \expandafter\board@split@field #1ARGEND%
+  \let\board@val@starttrimfilechar\board@temp@curfilechar
+  \let\board@val@starttrimfilenum\board@temp@curfilenum
+  \let\board@val@starttrimranknum\board@temp@curranknum}%
+
+\define@key[UFCB]{glofill}{starttrim}{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,starttrim=#1}}%
+
+\define@key[UFCB]{locfill}{stoptrim}{%
+  \expandafter\board@split@field#1ARGEND%
+  \let\board@val@stoptrimfilechar\board@temp@curfilechar
+  \let\board@val@stoptrimfilenum\board@temp@curfilenum
+  \let\board@val@stoptrimranknum\board@temp@curranknum}%}%
+
+\define@key[UFCB]{glofill}{stoptrim}{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,starttrim=#1}}%
+
+\define@key[UFCB]{locfill}{trimarea}[\printarea]{% a7-f1 %
+ \ifthenelse{\equal{#1}{empty}}%
+  {\def\board@val@starttrimfilenum{-1}%
+   \def\board@val@starttrimranknum{-1}%
+   \def\board@val@stoptrimfilenum{-1}%
+   \def\board@val@stoptrimrankenum{-1}}%
+  {\expandafter\board@split@areasort#1ARGEND%
+   \let\board@val@starttrimfilechar\board@temp@curstartfilechar
+   \let\board@val@starttrimfilenum\board@temp@curstartfilenum
+   \let\board@val@starttrimranknum\board@temp@curstartranknum
+   \let\board@val@stoptrimfilechar\board@temp@curstopfilechar
+   \let\board@val@stoptrimfilenum\board@temp@curstopfilenum
+   \let\board@val@stoptrimranknum\board@temp@curstopranknum}%
+  \ifUFCB@locfill@captrimtoprint
+   \ifnum\board@val@starttrimfilenum<\board@val@startprintfilenum
+    \let\board@val@starttrimfilenum\board@val@startprintfilenum
+   \fi
+   \ifnum\board@val@stoptrimfilenum>\board@val@stopprintfilenum
+    \let\board@val@stoptrimfilenum\board@val@stopprintfilenum
+   \fi
+   \ifnum\board@val@starttrimranknum>\board@val@startprintranknum
+    \let\board@val@starttrimranknum\board@val@startprintranknum
+   \fi
+   \ifnum\board@val@stoptrimranknum<\board@val@stopprintranknum
+    \let\board@val@stoptrimranknum\board@val@stopprintranknum
+   \fi
+   \ifthenelse
+    {\(\board@val@starttrimfilenum>\board@val@stoptrimfilenum\)
+     \OR
+     \(\board@val@starttrimranknum<\board@val@stoptrimranknum\)}%
+    {\def\board@val@starttrimfilenum{-1}%
+     \def\board@val@starttrimranknum{-1}%
+     \def\board@val@stoptrimfilenum{-1}%
+     \def\board@val@stoptrimrankenum{-1}}%
+    {}%
+  \fi}%
+
+\define@key[UFCB]{glofill}{trimarea}{%
+    \board@do@l@addto@macro\board@val@savedkeylist{,trimarea=#1}}%
+
+\define@boolkey[UFCB]{locfill}{captrimtoprint}[true]{}%
+
+\define@boolkey[UFCB]{glofill}{captrimtoprint}[true]{%
+    \board@do@l@addto@macro\board@val@savedkeylist{,captrimtoprint=#1}}%
+
+\define@boolkey[UFCB]{locfill}{trim}[true]{%
+ \ifUFCB@locfill@trim
+  \board@do@setsinglekeys*[UFCB]{locfill}{trimarea=\printarea}%
+ \else
+  \board@do@setsinglekeys*[UFCB]{locfill}{trimarea=\board}%
+  \fi}%
+
+\define@key[UFCB]{glofill}{trim}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,trim=#1}}%
+
+%% clipping
+
+%% clipping the pictures along a path
+\define@key[UFCB]{locset}{clip}[true]{% D
+ \board@do@setsinglekeys*[UFCB]{intclip}{true,#1}}%
+
+\define@key[UFCB]{gloset}{clip}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,clip={#1}}{}}%
+
+\define@key[UFCB]{locset}{pgfclip}[true]{% D
+ \board@do@setsinglekeys*[UFCB]{intclip}{true,#1}}%
+
+\define@key[UFCB]{gloset}{pgfclip}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,pgfclip={#1}}{}}%
+
+\define@key[UFCB]{locset}{markclip}[true]{% D
+ \board@do@setsinglekeys*[UFCB]{intmarkclip}{true,#1}}%
+
+\define@key[UFCB]{gloset}{markclip}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,markclip={#1}}{}}%
+
+\define@key[UFCB]{locset}{backclip}[true]{% D
+ \board@do@setsinglekeys*[UFCB]{intbackclip}{true,#1}}%
+
+\define@key[UFCB]{gloset}{backclip}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,backclip={#1}}{}}%
+
+\define@key[UFCB]{intclip}{true}[true]{%
+ \def\board@pgf@usemarkclippath{clip}%
+ \def\board@pgf@usebackclippath{clip}}
+
+\define@key[UFCB]{intclip}{false}[true]{%
+ \def\board@pgf@usemarkclippath{discard}%
+ \def\board@pgf@usebackclippath{discard}}
+
+\define@key[UFCB]{intmarkclip}{true}[true]{%
+ \def\board@pgf@usemarkclippath{clip}}
+
+\define@key[UFCB]{intmarkclip}{false}[true]{%
+ \def\board@pgf@usemarkclippath{discard}}
+
+\define@key[UFCB]{intbackclip}{true}[true]{%
+ \def\board@pgf@usebackclippath{clip}}
+
+\define@key[UFCB]{intbackclip}{false}[true]{%
+ \def\board@pgf@usebackclippath{discard}}
+
+\define@key[UFCB]{intclip}{left}[0pt]{%
+ \def\board@pgf@markclipleftpadding{#1}%
+ \def\board@pgf@backclipleftpadding{#1}}
+
+\define@key[UFCB]{intclip}{top}[0pt]{%
+ \def\board@pgf@markcliptoppadding{#1}%
+ \def\board@pgf@backcliptoppadding{#1}}
+
+\define@key[UFCB]{intclip}{right}[0pt]{%
+ \def\board@pgf@markcliprightpadding{#1}%
+ \def\board@pgf@backcliprightpadding{#1}}
+
+\define@key[UFCB]{intclip}{bottom}[0pt]{%
+ \def\board@pgf@markclipbottompadding{#1}%
+ \def\board@pgf@backclipbottompadding{#1}}
+
+\define@key[UFCB]{intmarkclip}{left}[0pt]{%
+ \def\board@pgf@markclipleftpadding{#1}}
+
+\define@key[UFCB]{intmarkclip}{top}[0pt]{%
+ \def\board@pgf@markcliptoppadding{#1}}
+
+\define@key[UFCB]{intmarkclip}{right}[0pt]{%
+ \def\board@pgf@markcliprightpadding{#1}}
+
+\define@key[UFCB]{intmarkclip}{bottom}[0pt]{%
+ \def\board@pgf@markclipbottompadding{#1}}
+
+\define@key[UFCB]{intbackclip}{left}[0pt]{%
+ \def\board@pgf@backclipleftpadding{#1}}
+
+\define@key[UFCB]{intbackclip}{top}[0pt]{%
+ \def\board@pgf@backcliptoppadding{#1}}
+
+\define@key[UFCB]{intbackclip}{right}[0pt]{%
+ \def\board@pgf@backcliprightpadding{#1}}
+
+\define@key[UFCB]{intbackclip}{bottom}[0pt]{%
+ \def\board@pgf@backclipbottompadding{#1}}
+
+%% pgf properties
+
+\define@key[UFCB]{locfill}{color}{% D
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground{\color{#1}}%
+ \fi
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground{\color{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{color}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,color=#1}}%
+
+\define@key[UFCB]{locfill}{pgfcolor}{% D
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground{\color{#1}}%
+ \fi
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground{\color{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{pgfcolor}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,pgfcolor=#1}}%
+
+%% padding for colorfields and other means
+\define@key[UFCB]{locfill}{padding}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground{\def\board@pgf@padding{#1}}%
+ \fi
+ \ifUFCB@locfill@usebackpgf %
+  \board@pgf@addbackground{\def\board@pgf@padding{#1}}%
+  \board@pgf@addbackground{\def\board@pgf@colorbackpadding{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{padding}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,padding=#1}}%
+
+\define@key[UFCB]{locfill}{pgfpadding}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground{\def\board@pgf@padding{#1}}%
+ \fi
+ \ifUFCB@locfill@usebackpgf %
+  \board@pgf@addbackground{\def\board@pgf@padding{#1}}%
+  \board@pgf@addbackground{\def\board@pgf@colorbackpadding{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{pgfpadding}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,pgfpadding=#1}}%
+
+\define@key[UFCB]{locfill}{opacity}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground%
+    {\pgfsetfillopacity{#1}%
+     \pgfsetstrokeopacity{#1}}%%
+ \fi
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground%
+    {\pgfsetfillopacity{#1}%
+     \pgfsetstrokeopacity{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{opacity}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,opacity=#1}}%
+
+\define@key[UFCB]{locfill}{pgfopacity}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground%
+    {\pgfsetfillopacity{#1}%
+     \pgfsetstrokeopacity{#1}}%%
+ \fi
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground%
+    {\pgfsetfillopacity{#1}%
+     \pgfsetstrokeopacity{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{pgfopacity}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,pgfopacity=#1}}%
+
+\define@key[UFCB]{locfill}{fillopacity}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground%
+    {\pgfsetfillopacity{#1}}%%
+ \fi
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground%
+    {\pgfsetfillopacity{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{fillopacity}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,opacity=#1}}%
+
+\define@key[UFCB]{locfill}{pgffillopacity}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground%
+    {\pgfsetfillopacity{#1}}%%
+ \fi
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground%
+    {\pgfsetfillopacity{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{pgffillopacity}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,pgffillopacity=#1}}%
+
+\define@key[UFCB]{locfill}{strokeopacity}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground%
+    {\pgfsetstrokeopacity{#1}}%
+ \fi%%
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground%
+    {\pgfsetstrokeopacity{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{strokeopacity}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,opacity=#1}}%
+
+\define@key[UFCB]{locfill}{pgfstrokeopacity}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground%
+    {\pgfsetstrokeopacity{#1}}%%
+ \fi
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground%
+    {\pgfsetstrokeopacity{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{pgfstrokeopacity}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,pgfstrokeopacity=#1}}%
+
+\define@key[UFCB]{locfill}{linewidth}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground{\def\board@pgf@linewidth{#1}}%
+ \fi
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground{\def\board@pgf@linewidth{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{linewidth}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,linewidth=#1}}%
+
+\define@key[UFCB]{locfill}{pgflinewidth}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground{\def\board@pgf@linewidth{#1}}%
+ \fi
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground{\def\board@pgf@linewidth{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{pgflinewidth}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,pgflinewidth=#1}}%
+
+\define@key[UFCB]{locfill}{backlinewidth}{% D
+  \board@pgf@addbackground{\def\board@pgf@linewidth{#1}}}%
+
+\define@key[UFCB]{glofill}{backlinewidth}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,linewidth=#1}}%
+
+\define@key[UFCB]{locfill}{marklinewidth}{% D
+  \board@pgf@addmarkground{\def\board@pgf@linewidth{#1}}}%
+
+\define@key[UFCB]{glofill}{marklinewidth}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,linewidth=#1}}%
+
+\define@key[UFCB]{locfill}{backcornerarc}{% D
+  \board@pgf@addbackground{\def\board@pgf@corner{#1}}}%
+
+\define@key[UFCB]{glofill}{backcornerarc}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,backcornerarc=#1}}%
+
+\define@key[UFCB]{locfill}{cornerarc}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground{\def\board@pgf@corner{#1}}%
+ \fi
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground{\def\board@pgf@corner{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{cornerarc}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,cornerarc=#1}}%
+
+\define@key[UFCB]{locfill}{pgfcornerarc}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground{\def\board@pgf@corner{#1}}%
+ \fi
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground{\def\board@pgf@corner{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{pgfcornerarc}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,pgfcornerarc=#1}}%
+
+\define@key[UFCB]{locfill}{arrow}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground{\def\board@pgf@arrow{#1}}%
+ \fi
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground{\def\board@pgf@arrow{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{arrow}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,arrow=#1}}%
+
+\define@key[UFCB]{locfill}{pgfarrow}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground{\def\board@pgf@arrow{#1}}%
+ \fi
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground{\def\board@pgf@arrow{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{pgfarrow}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,pgfarrow=#1}}%
+
+\define@key[UFCB]{locfill}{shortenstart}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground{\def\board@pgf@shortenstart{#1}}%
+ \fi
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground{\def\board@pgf@shortenstart{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{shortenstart}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,shortenstart=#1}}%
+
+\define@key[UFCB]{locfill}{pgfshortenstart}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground{\def\board@pgf@shortenstart{#1}}%
+ \fi
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground{\def\board@pgf@shortenstart{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{pgfshortenstart}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,pgfshortenstart=#1}}%
+
+\define@key[UFCB]{locfill}{shortenend}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground{\def\board@pgf@shortenend{#1}}%
+ \fi
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground{\def\board@pgf@shortenend{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{shortenend}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,shortenend=#1}}%
+
+\define@key[UFCB]{locfill}{pgfshortenend}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground{\def\board@pgf@shortenend{#1}}%
+ \fi
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground{\def\board@pgf@shortenend{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{pgfshortenend}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,pgfshortenend=#1}}%
+
+\define@key[UFCB]{locfill}{shorten}{% D
+ \board@do@setsinglekeys*[UFCB]{locfill}{shortenend=#1,shortenstart=#1}}%
+
+\define@key[UFCB]{glofill}{shorten}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,shorten=#1}}%
+
+\define@key[UFCB]{locfill}{pgfshorten}{% D
+ \board@do@setsinglekeys*[UFCB]{locfill}{pgfshortenend=#1,pgfshortenstart=#1}}%
+
+\define@key[UFCB]{glofill}{pgfshorten}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,pgfshorten=#1}}%
+
+\define@key[UFCB]{locfill}{text}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground{\def\board@pgf@curtext{#1}}%
+ \fi
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground{\def\board@pgf@curtext{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{text}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,text={#1}}}%
+
+\define@key[UFCB]{locfill}{pgftext}{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground{\def\board@pgf@curtext{#1}}%
+ \fi
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground{\def\board@pgf@curtext{#1}}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{pgftext}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,pgftext={#1}}}%
+
+\define@key[UFCB]{locfill}{addpgf}[\end{pgfscope}\begin{pgfscope}]{% D
+ \ifUFCB@locfill@usemarkpgf
+  \board@pgf@addmarkground{#1}%
+ \fi
+ \ifUFCB@locfill@usebackpgf
+  \board@pgf@addbackground{#1}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{addpgf}[\end{pgfscope}\begin{pgfscope}]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,addpgf={#1}}}%
+
+\define@key[UFCB]{locfill}{markstyle}{% D
+  \board@do@savemarkstyle#1ARGEND}%
+
+\define@key[UFCB]{glofill}{markstyle}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,markstyle=#1}}%
+
+\define@key[UFCB]{locfill}{backstyle}{% D
+  \board@do@savebackstyle#1ARGEND}%
+
+\define@key[UFCB]{glofill}{backstyle}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,backstyle=#1}}%
+
+\define@key[UFCB]{locfill}{pgfstyle}{% D
+  \expandafter\board@do@savemarkstyle#1ARGEND% change 15.08.2007
+  \expandafter\board@do@savebackstyle#1ARGEND}% changed 15.08.2007
+
+
+
+\define@key[UFCB]{glofill}{pgfstyle}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,pgfstyle=#1}}%
+
+%%% fields marks
+
+\define@key[UFCB]{locfill}{markarea}{% D
+  \edef\board@temp@list{#1}%
+   \@for\board@temp@curarea:=\board@temp@list\do
+  {\board@pgf@add@fieldmarkstyletoarea{\board@temp@curarea}}}%
+
+\define@key[UFCB]{glofill}{markarea}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,markarea=#1}}%
+
+\define@key[UFCB]{locfill}{backarea}{% D
+ \edef\board@temp@list{#1}%
+ \@for\board@temp@curarea:=\board@temp@list\do
+  {\board@pgf@add@fieldbackstyletoarea{\board@temp@curarea}}}%
+
+\define@key[UFCB]{glofill}{backarea}{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,backarea={#1}}}%
+
+\define@key[UFCB]{locfill}{markareas}{% D
+ \edef\board@temp@list{#1}%
+ \@for\board@temp@curarea:=\board@temp@list\do
+  {\board@pgf@add@fieldmarkstyletoarea{\board@temp@curarea}}}%
+
+\define@key[UFCB]{glofill}{markareas}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,markareas={#1}}}%
+
+\define@key[UFCB]{locfill}{backareas}{% D
+ \edef\board@temp@list{#1}%
+ \@for\board@temp@curarea:=\board@temp@list\do
+  {\board@pgf@add@fieldbackstyletoarea{\board@temp@curarea}}}%
+
+\define@key[UFCB]{glofill}{backareas}{%
+  \board@do@l@addto@macro\board@val@savedkeylist{,backareas={#1}}}%
+
+\define@key[UFCB]{locfill}{markfield}{% #1=list of fields D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfield:=\board@temp@list\do
+    {\board@do@setsinglekeys*[UFCB]{locfill}{markarea=\board@temp@curfield-\board@temp@curfield}}}%
+
+\define@key[UFCB]{glofill}{markfield}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,markfield={#1}}}%
+
+\define@key[UFCB]{locfill}{backfield}{% #1=list of fields D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfield:=\board@temp@list\do
+    {\board@do@setsinglekeys*[UFCB]{locfill}{backarea=\board@temp@curfield-\board@temp@curfield}}}%
+
+\define@key[UFCB]{glofill}{backfield}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,backfield={#1}}}%
+
+\define@key[UFCB]{locfill}{markfields}{% #1=list of fields D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfield:=\board@temp@list\do
+    {\board@do@setsinglekeys*[UFCB]{locfill}{markarea=\board@temp@curfield-\board@temp@curfield}}}%
+
+\define@key[UFCB]{glofill}{markfields}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,markfields={#1}}}%
+
+\define@key[UFCB]{locfill}{backfields}{% #1=list of fields D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfield:=\board@temp@list\do
+    {\board@do@setsinglekeys*[UFCB]{locfill}{backarea=\board@temp@curfield-\board@temp@curfield}}}%
+
+\define@key[UFCB]{glofill}{backfields}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,backfields={#1}}}%
+
+\define@key[UFCB]{locfill}{markboard}[true]{% D
+  \edef\board@temp@curstartfield{\board@val@minfilechar\board@val@maxranknum}%
+  \edef\board@temp@curstopfield{\board@val@maxfilechar\board@val@minranknum}%
+  \board@do@setsinglekeys*[UFCB]{locfill}{markarea=\board@temp@curstartfield-\board@temp@curstopfield}}%
+
+\define@key[UFCB]{glofill}{markboard}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,markboard=#1}}%
+
+\define@key[UFCB]{locfill}{backboard}[true]{% D
+  \edef\board@temp@curstartfield{\board@val@minfilechar\board@val@maxranknum}%
+  \edef\board@temp@curstopfield{\board@val@maxfilechar\board@val@minranknum}%
+  \board@do@setsinglekeys*[UFCB]{locfill}{backarea=\board@temp@curstartfield-\board@temp@curstopfield}}%
+
+\define@key[UFCB]{glofill}{backboard}[true]{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,backboard=#1}}%
+
+\define@key[UFCB]{locfill}{markrank}{% D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@currank:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@val@minfilechar\board@temp@currank}%
+    \edef\board@temp@curstopfield{\board@val@maxfilechar\board@temp@currank}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+     markarea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{markrank}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,markrank={#1}}}%
+
+\define@key[UFCB]{locfill}{backrank}{% D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@currank:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@val@minfilechar\board@temp@currank}%
+    \edef\board@temp@curstopfield{\board@val@maxfilechar\board@temp@currank}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+     backarea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{backrank}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,backrank={#1}}}%
+
+\define@key[UFCB]{locfill}{markranks}{% D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@currank:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@val@minfilechar\board@temp@currank}%
+    \edef\board@temp@curstopfield{\board@val@maxfilechar\board@temp@currank}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+     markarea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{markranks}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,markranks={#1}}}%
+
+\define@key[UFCB]{locfill}{backranks}{% D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@currank:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@val@minfilechar\board@temp@currank}%
+    \edef\board@temp@curstopfield{\board@val@maxfilechar\board@temp@currank}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+     backarea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{backranks}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,backranks={#1}}}%
+
+\define@key[UFCB]{locfill}{markfile}{% D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfile:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@temp@curfile\board@val@maxranknum}%
+    \edef\board@temp@curstopfield{\board@temp@curfile\board@val@minranknum}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+     markarea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{markfile}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,markfile={#1}}}%
+
+\define@key[UFCB]{locfill}{backfile}{% D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfile:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@temp@curfile\board@val@maxranknum}%
+    \edef\board@temp@curstopfield{\board@temp@curfile\board@val@minranknum}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+     backarea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{backfile}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,backfile={#1}}}%
+
+\define@key[UFCB]{locfill}{markfiles}{% D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfile:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@temp@curfile\board@val@maxranknum}%
+    \edef\board@temp@curstopfield{\board@temp@curfile\board@val@minranknum}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+     markarea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{markfiles}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,markfiles={#1}}}%
+
+\define@key[UFCB]{locfill}{backfiles}{% D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfile:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@temp@curfile\board@val@maxranknum}%
+    \edef\board@temp@curstopfield{\board@temp@curfile\board@val@minranknum}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+     backarea=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{backfiles}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,backfiles={#1}}}%
+
+%%% region marks
+
+\define@key[UFCB]{locfill}{markregion}{% D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curarea:=\board@temp@list\do
+    {\expandafter\board@split@areasort\board@temp@curarea ARGEND%
+     \edef\board@temp{{\board@temp@curstartfield}{\board@temp@curstopfield}}%
+     \expandafter\board@pgf@add@regionmarkstyle\board@temp%{a}{b}%
+     }}%
+
+\define@key[UFCB]{glofill}{markregion}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,markregion={#1}}}%
+
+\define@key[UFCB]{locfill}{backregion}{% D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curarea:=\board@temp@list\do
+    {\expandafter\board@split@areasort\board@temp@curarea ARGEND%
+     \edef\board@temp{{\board@temp@curstartfield}{\board@temp@curstopfield}}%
+     \expandafter\board@pgf@add@regionbackstyle\board@temp%{a}{b}%
+     }}%
+
+\define@key[UFCB]{glofill}{backregion}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,backregion={#1}}}%
+
+\define@key[UFCB]{locfill}{markregions}{% D
+   \edef\board@temp@list{#1}%
+  \@for\board@temp@curarea:=\board@temp@list\do
+    {\expandafter\board@split@areasort\board@temp@curarea ARGEND%
+     \edef\board@temp{{\board@temp@curstartfield}{\board@temp@curstopfield}}%
+     \expandafter\board@pgf@add@regionmarkstyle\board@temp%{a}{b}%
+     }}%
+
+\define@key[UFCB]{glofill}{markregions}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,markregions={#1}}}%
+
+\define@key[UFCB]{locfill}{backregions}{% D
+    \edef\board@temp@list{#1}%
+  \@for\board@temp@curarea:=\board@temp@list\do
+    {\expandafter\board@split@areasort\board@temp@curarea ARGEND%
+     \edef\board@temp{{\board@temp@curstartfield}{\board@temp@curstopfield}}%
+     \expandafter\board@pgf@add@regionbackstyle\board@temp%{a}{b}%
+     }}%
+
+\define@key[UFCB]{glofill}{backregions}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,backregions={#1}}}%
+
+%%% move marks
+
+\define@key[UFCB]{locfill}{markmove}{% D
+    \edef\board@temp@list{#1}%
+  \@for\board@temp@curarea:=\board@temp@list\do
+    {\expandafter\board@split@area\board@temp@curarea ARGEND%
+     \edef\board@temp{{\board@temp@curstartfield}{\board@temp@curstopfield}}%
+     \expandafter\board@pgf@add@movemarkstyle\board@temp}}%
+
+\define@key[UFCB]{glofill}{markmove}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,markmove={#1}}}%
+
+\define@key[UFCB]{locfill}{backmove}{% D
+   \edef\board@temp@list{#1}%
+  \@for\board@temp@curarea:=\board@temp@list\do
+    {\expandafter\board@split@area\board@temp@curarea ARGEND%
+     \edef\board@temp{{\board@temp@curstartfield}{\board@temp@curstopfield}}%
+     \expandafter\board@pgf@add@movebackstyle\board@temp}}%
+
+\define@key[UFCB]{glofill}{backmove}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,backmove={#1}}}%
+
+\define@key[UFCB]{locfill}{markmoves}{% D
+    \edef\board@temp@list{#1}%
+  \@for\board@temp@curarea:=\board@temp@list\do
+    {\expandafter\board@split@area\board@temp@curarea ARGEND%
+     \edef\board@temp{{\board@temp@curstartfield}{\board@temp@curstopfield}}%
+     \expandafter\board@pgf@add@movemarkstyle\board@temp}}%
+
+\define@key[UFCB]{glofill}{markmoves}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,markmoves={#1}}}%
+
+\define@key[UFCB]{locfill}{backmoves}{% D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curarea:=\board@temp@list\do
+    {\expandafter\board@split@area\board@temp@curarea ARGEND%
+     \edef\board@temp{{\board@temp@curstartfield}{\board@temp@curstopfield}}%
+     \expandafter\board@pgf@add@movebackstyle\board@temp}}%
+
+\define@key[UFCB]{glofill}{backmoves}{% D
+    \board@do@l@addto@macro\board@val@savedkeylist{,backmoves={#1}}}%
+
+%% obsolete keys, shortcuts
+
+%% obsolete key,
+\define@choicekey[UFCB]{locfill}{applycolor}[\@tempval\@tempnr]{all,none,white,black}{% D
+ \ifcase\@tempnr\relax
+  \board@do@setsinglekeys*[UFCB]{locfill}{trimtocolor=false}%
+ \or
+  \board@do@setsinglekeys*[UFCB]{locfill}{useonwhite=false,useonblack=false}%
+ \or
+  \board@do@setsinglekeys*[UFCB]{locfill}{trimtocolor=white}%
+ \or
+  \board@do@setsinglekeys*[UFCB]{locfill}{trimtocolor=black}%
+ \fi}%
+
+\define@key[UFCB]{glofill}{applycolor}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,applycolor=#1}}%
+
+\define@key[UFCB]{locfill}{colorbackarea}{% D
+  \board@do@setsinglekeys*[UFCB]{locfill}{colorbackareas=#1}}%
+
+\define@key[UFCB]{glofill}{colorbackarea}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,colorbackarea=#1}}%
+
+\define@key[UFCB]{locfill}{colorbackareas}{% D
+ \let\board@pgf@savebackstyle\board@pgf@curbackstyle
+ \board@do@setsinglekeys*[UFCB]{locfill}{backstyle=color,backareas=#1,backstyle=\board@pgf@savebackstyle}}%
+
+\define@key[UFCB]{glofill}{colorbackareas}{% D
+  \board@do@l@addto@macro\board@val@savedkeylist{,colorbackareas={#1}}}%
+
+\define@key[UFCB]{locfill}{colorbackboard}[true]{%D
+   \edef\board@temp@curstartfield{\board@val@minfilechar\board@val@maxranknum}%
+   \edef\board@temp@curstopfield{\board@val@maxfilechar\board@val@minranknum}%
+   \board@do@setsinglekeys*[UFCB]{locfill}{colorbackareas=\board@temp@curstartfield-\board@temp@curstopfield}}%
+
+\define@key[UFCB]{glofill}{colorbackboard}[true]{%D
+   \board@do@l@addto@macro\board@val@savedkeylist{,colorbackboard=#1}}%
+
+\define@key[UFCB]{locfill}{colorboard}[true]{%D
+   \edef\board@temp@curstartfield{\board@val@startprintfilechar\board@val@startprintranknum}%
+   \edef\board@temp@curstopfield{\board@val@stopprintfilechar\board@val@stopprintranknum}%
+   \board@do@setsinglekeys*[UFCB]{locfill}{colorbackarea=\board@temp@curstartfield-\board@temp@curstopfield}}%
+
+\define@key[UFCB]{glofill}{colorboard}[true]{%D
+   \board@do@l@addto@macro\board@val@savedkeylist{,colorboard=#1}}%
+
+\define@key[UFCB]{locfill}{colorbackranks}{%D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@currank:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@val@minfilechar\board@temp@currank}%
+    \edef\board@temp@curstopfield{\board@val@maxfilechar\board@temp@currank}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+      colorbackareas=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{colorbackranks}{%D
+  \board@do@l@addto@macro\board@val@savedkeylist{,colorbackranks={#1}}}%
+
+\define@key[UFCB]{locfill}{colorbackrank}{% D
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+      colorbackranks=#1}}%
+
+\define@key[UFCB]{glofill}{colorbackrank}{%D
+  \board@do@l@addto@macro\board@val@savedkeylist{,colorbackrank={#1}}}%
+
+\define@key[UFCB]{locfill}{colorbackfiles}{%D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfile:=\board@temp@list\do
+   {\edef\board@temp@curstartfield{\board@temp@curfile\board@val@maxranknum}%
+    \edef\board@temp@curstopfield{\board@temp@curfile\board@val@minranknum}%
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+      colorbackareas=\board@temp@curstartfield-\board@temp@curstopfield}}}%
+
+\define@key[UFCB]{glofill}{colorbackfiles}{%D
+  \board@do@l@addto@macro\board@val@savedkeylist{,colorbackfiles={#1}}}%
+
+\define@key[UFCB]{locfill}{colorbackfile}{% D
+    \board@do@setsinglekeys*[UFCB]{locfill}{%
+      colorbackfiles=#1}}%
+
+\define@key[UFCB]{glofill}{colorbackfile}{%D
+  \board@do@l@addto@macro\board@val@savedkeylist{,colorbackfile={#1}}}%
+
+\define@key[UFCB]{locfill}{colorbackfields}{% #1=list of fields %D
+  \edef\board@temp@list{#1}%
+  \@for\board@temp@curfield:=\board@temp@list\do
+    {\board@do@setsinglekeys*[UFCB]{locfill}{colorbackareas=\board@temp@curfield-\board@temp@curfield}}}%
+
+\define@key[UFCB]{glofill}{colorbackfields}{% %D
+  \board@do@l@addto@macro\board@val@savedkeylist{,colorbackfields={#1}}}%
+
+\define@key[UFCB]{locfill}{colorbackfield}{% %D
+  \board@do@setsinglekeys*[UFCB]{locfill}{colorbackareas=#1-#1}}%
+
+\define@key[UFCB]{glofill}{colorbackfield}{% %D
+  \board@do@l@addto@macro\board@val@savedkeylist{,colorbackfield=#1}}%
+
+\define@key[UFCB]{locfill}{colorwhitebackfields}[true]{%
+ \let\board@pgf@savetrimtocolor\board@pgf@curtrimtocolor%
+ \board@do@setsinglekeys*[UFCB]{locfill}{trimtocolor=white, colorbackboard}%
+ \expandafter\board@do@setsavedkey\expandafter{\board@pgf@savetrimtocolor}{trimtocolor}}%
+
+\define@key[UFCB]{glofill}{colorwhitebackfields}[true]{% %D
+    \board@do@l@addto@macro\board@val@savedkeylist{,colorwhitefields=#1}}%
+
+\define@key[UFCB]{locfill}{colorblackbackfields}[true]{%
+  \let\board@pgf@savetrimtocolor\board@pgf@curtrimtocolor%
+  \board@do@setsinglekeys*[UFCB]{locfill}{trimtocolor=black, colorbackboard}%
+  \expandafter\board@do@setsavedkey\expandafter{\board@pgf@savetrimtocolor}{trimtocolor}}%
+
+\define@key[UFCB]{glofill}{colorblackbackfields}[true]{% %D
+    \board@do@l@addto@macro\board@val@savedkeylist{,colorblackfields=#1}}%
+
+%%obsolete
+\define@key[UFCB]{locfill}{colorblackfields}[true]{%
+  \let\board@pgf@savetrimtocolor\board@pgf@curtrimtocolor%
+  \board@do@setsinglekeys*[UFCB]{locfill}{trimtocolor=black, colorbackboard}%
+  \expandafter\board@do@setsavedkey\expandafter{\board@pgf@savetrimtocolor}{trimtocolor}}%
+
+\define@key[UFCB]{glofill}{colorblackfields}[true]{% %D
+    \board@do@l@addto@macro\board@val@savedkeylist{,colorblackfields=#1}}%
+
+%% obsolete
+\define@key[UFCB]{locfill}{colorwhitefields}[true]{%
+ \let\board@pgf@savetrimtocolor\board@pgf@curtrimtocolor%
+ \board@do@setsinglekeys*[UFCB]{locfill}{trimtocolor=white, colorbackboard}%
+ \expandafter\board@do@setsavedkey\expandafter{\board@pgf@savetrimtocolor}{trimtocolor}}%
+
+\define@key[UFCB]{glofill}{colorwhitefields}[true]{% %D
+    \board@do@l@addto@macro\board@val@savedkeylist{,colorwhitefields=#1}}%
+
+%% to add background border
+
+\define@key[UFCB]{locfill}{pgfborder}[\printarea]{%
+ \edef\board@pgf@savebackstyle{\board@pgf@curbackstyle}%
+ \board@do@setsinglekeys*[UFCB]{locfill}{%
+   backstyle=border,backregions=#1}%
+  \expandafter\board@do@setsavedkey\expandafter{\board@pgf@savebackstyle}{backstyle}}%
+
+\define@key[UFCB]{glofill}{pgfborder}[\printarea]{% %D
+    \board@do@l@addto@macro\board@val@savedkeylist{,pgfborder=#1}}%
+
+
+%</chessboard-keys-pgf>

@@ -1,0 +1,31 @@
+\documentclass{beamer}
+\usepackage[T1]{fontenc}
+\usepackage[skaknew]{chessboard, skak}
+\begin{document}
+
+\begin{frame}
+\newgame
+\only<1->{\setchessboard{hideall,showmover=false}}
+\only<2->{\setchessboard{showpieces={p,P}}}
+\only<3->{\setchessboard{showpieces={K,k}}}
+\only<4->{\setchessboard{showpieces={Q,q}}}
+\only<5->{\setchessboard{showpieces={R,r}}}
+\only<6->{\setchessboard{showpieces={B,b}}}
+\only<7->{\setchessboard{showpieces={N,n}}}
+\chessboard
+\end{frame}
+
+\begin{frame}
+\newgame\setchessboard{markstyle=border,color=blue}
+\only<1>{\mainline{1.e4}}
+\only<1>{\setchessboard{markfields=e4}}
+\only<2>{\hidemoves{1.e4}\mainline{1... e5}}
+\only<2>{\setchessboard{markfields=e5}}
+\only<3>{\hidemoves{1.e4 e5}\mainline{2. Nf3}}
+\only<3>{\setchessboard{markfields=f3}}
+\only<4>{\hidemoves{1.e4 e5 2.Nf3}\mainline{2... Nc6}}
+\only<4>{\setchessboard{markfields=c6}}
+
+\chessboard
+\end{frame}
+\end{document}
