@@ -24,7 +24,7 @@ uploadconfig = {
   version = "v"..packageversion.." "..packagedate,
   author  = mydata.name,
   license = "lppl1.3c",
-  summary = "An extension to the skak package for chess typesetting",
+  summary = "chessboard – Print chess boards",
   ctanPath = "/macros/latex/contrib/chessboard",
   repository = mydata.github .. "chessboard",
   bugtracker = mydata.github .. "chessboard/issues",
@@ -34,9 +34,12 @@ uploadconfig = {
   update   = true ,
   topic=    {"games"},
   note     = [[Uploaded automatically by l3build... description is unchanged despite the missing linebreaks, authors are unchanged]],
-  description=[[Xskak, as its prime function, saves information about a chess game for later use (e.g., 
-               to loop through a game to make an animated board). The package also extends the input that the 
-               parsing commands can handle and offers an interface to define and switch between indefinite levels of styles.
+  description=[[This package offers commands to print chessboards. 
+                It can print partial boards, hide pieces and fields, color the boards 
+                and put various marks on the board. It has a lot of options to place 
+                pieces on the board. Using exotic pieces (e.g., for fairy chess) is possible.
+                The documentation includes an example of an animated chessboard, 
+                for those whose PDF viewer can display animations.
               ]],
   announcement_file="ctan.ann"             
 }
