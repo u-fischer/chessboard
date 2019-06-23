@@ -1,11 +1,14 @@
 # chessboard --- A package to print chessboards
-Version 1.7 Ulrike Fischer 2014
+Packageversion: 1.8 Ulrike Fischer 2019
+Packagedate: 2019-06-23
 
 ## LICENSE
 LaTeX Project Public License
 
 
 ## CHANGES
+1.8: no longer uses \arabic to avoid problems with pages which redefine it.
+     Added source of documentation. 
 1.7: chessboard no longer loads amssymb (to avoid clashes)
 1.6: Corrected some bugs. Added textfont key for text style.
 1.5: Corrected some bugs.

@@ -36,7 +36,7 @@
 \ifpdf\else
 \RequirePackage{pst-node}%
 \fi
-
+\RequirePackage{etoolbox}
 %%%%%%%
 %% naming conventions
 %%%%%%%
@@ -295,13 +295,13 @@
        {\isodd{\value{cnt@board}}}
        {\ifthenelse%
          {\equal{\board@val@whitefieldlist}{}}%
-         {\edef\board@val@whitefieldlist{\zeroalph{cnt@board@file}\arabic{cnt@board@rank}}}%
-         {\edef\board@temp@curfield{\zeroalph{cnt@board@file}\arabic{cnt@board@rank}}%
+         {\edef\board@val@whitefieldlist{\zeroalph{cnt@board@file}\number\value{cnt@board@rank}}}%
+         {\edef\board@temp@curfield{\zeroalph{cnt@board@file}\number\value{cnt@board@rank}}%
           \expandafter\board@do@l@addto@macro\expandafter\board@val@whitefieldlist\expandafter{\expandafter,\board@temp@curfield}}}%
        {\ifthenelse%
          {\equal{\board@val@blackfieldlist}{}}%
-         {\edef\board@val@blackfieldlist{\zeroalph{cnt@board@file}\arabic{cnt@board@rank}}}%
-         {\edef\board@temp@curfield{\zeroalph{cnt@board@file}\arabic{cnt@board@rank}}%
+         {\edef\board@val@blackfieldlist{\zeroalph{cnt@board@file}\number\value{cnt@board@rank}}}%
+         {\edef\board@temp@curfield{\zeroalph{cnt@board@file}\number\value{cnt@board@rank}}%
           \expandafter\board@do@l@addto@macro\expandafter\board@val@blackfieldlist\expandafter{\expandafter,\board@temp@curfield}}}%
       \addtocounter{cnt@board@rank}{1}}%
     \addtocounter{cnt@board@file}{1}}}%
@@ -688,7 +688,7 @@
        {\value{cnt@board}>0}%
        {\edef\board@temp@currankposition{%
           \board@temp@currankposition
-          \arabic{cnt@board}%
+          \number\value{cnt@board}%
           \csname board@val@f\the\c@cnt@board@file r\the\c@cnt@board@rank @piecechar\endcsname}%
         \setcounter{cnt@board}{0}}%
        {\edef\board@temp@currankposition{%
@@ -699,7 +699,7 @@
    {\value{cnt@board}>0}%
    {\edef\board@temp@currankposition{%
       \board@temp@currankposition
-      \arabic{cnt@board}}}%
+      \number\value{cnt@board}}}%
    {}}%
 
 %% stores the fen in chessgame.<name> (as in skak.sty the \storegame command
@@ -1355,10 +1355,16 @@
 \newcommand\board@skak@piececharlist{K,Q,R,B,N,P,k,q,r,b,n,p}%
 \newcommand\board@skak@whitepiececharlist{K,Q,R,B,N,P}%
 \newcommand\board@skak@blackpiececharlist{k,q,r,b,n,p}%
-
 \AtBeginDocument{%
  \@ifpackageloaded{skak}%
-   {\def\board@skak@do@fencalculate{%
+   {%patch skak, see issue #1
+    \patchcmd\Fen@handleA{\arabic}{\number\value}{}{}%
+    \patchcmd\Fen@handleA{\arabic}{\number\value}{}{}%
+    \patchcmd\Fen@handleA{\thehelpgobble}{\c@helpgobble}{}{}%
+    \patchcmd\Fen@handleA{\thehelpgobble}{\c@helpgobble}{}{}%
+    \patchcmd\Fen@calculate{\arabic}{\number\value}{}{}%
+    \patchcmd\Fen@calculate{\arabic}{\number\value}{}{}%
+    \def\board@skak@do@fencalculate{%
      \Fen@calculate
      \let\board@val@fencalculate\temp@board}%
     \def\board@skak@set@special@psmarkers#1#2{%
@@ -1366,8 +1372,8 @@
      \setcounter{fileFrom}{\value{fileTo}}%
      \setcounter{rankFrom}{\value{rankTo}}%
      \get@translation#2%
-     \rput(BM){\pnode(-\arabic{fileFrom},\arabic{rankFrom}){From}}%
-     \rput(BM){\pnode(-\arabic{fileTo},\arabic{rankTo}){To}}}}%
+     \rput(BM){\pnode(-\number\value{fileFrom},\number\value{rankFrom}){From}}%
+     \rput(BM){\pnode(-\number\value{fileTo},\number\value{rankTo}){To}}}}%
    {\def\board@skak@do@fencalculate{%
      \def\board@val@fencalculate{8/8/8/8/8/8/8/8}}}}%
 
@@ -1504,7 +1510,7 @@
   {\setcounter{cnt@board@rank}{0}%
    \whiledo %nodes for on one field for each rank
     {\value{cnt@board@rank}<\numexpr\board@val@maxranknum+1\relax}%
-    {\edef\board@temp{\zeroalph{cnt@board@file}\arabic{cnt@board@rank}}%
+    {\edef\board@temp{\zeroalph{cnt@board@file}\number\value{cnt@board@rank}}%
      \expandafter\board@pgf@addnode\expandafter{\board@temp}{#1}%
      \expandafter\board@do@l@addto@macro\csname board@pgf@#1ground\endcsname{%
        \pgftransformshift{\pgfpointxy{0}{1}}}%
@@ -1620,7 +1626,7 @@
   {\setcounter{cnt@board@file}{\board@temp@curstartfilenum}%
    \whiledo
     {\value{cnt@board@file}<\numexpr \board@temp@curstopfilenum+1\relax}%
-    {\edef\board@temp@curfield{\zeroalph{cnt@board@file}\arabic{cnt@board@rank}}%
+    {\edef\board@temp@curfield{\zeroalph{cnt@board@file}\number\value{cnt@board@rank}}%
      \expandafter\board@pgf@addpgftofield\expandafter{\board@temp@curfield}{mark}%
      \addtocounter{cnt@board@file}{1}}%
    \addtocounter{cnt@board@rank}{-1}}}%
@@ -1638,7 +1644,7 @@
   {\setcounter{cnt@board@file}{\board@temp@curstartfilenum}%
    \whiledo
     {\value{cnt@board@file}<\numexpr \board@temp@curstopfilenum+1\relax}%
-    {\edef\board@temp@curfield{\zeroalph{cnt@board@file}\arabic{cnt@board@rank}}%
+    {\edef\board@temp@curfield{\zeroalph{cnt@board@file}\number\value{cnt@board@rank}}%
      \expandafter\board@pgf@addpgftofield\expandafter{\board@temp@curfield}{back}%
      \addtocounter{cnt@board@file}{1}}%
    \addtocounter{cnt@board@rank}{-1}}}%

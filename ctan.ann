@@ -1,2 +1,5 @@
-
+In version 1.8
+- the source of the documentation has been added, so that it now can be included
+  in texlive 
+- issue #1 has been handled.
 

@@ -124,7 +124,8 @@ the foreground picture.
 
 \begin{description}
 \item[2019-06-23 (Version 1.8)] Uploaded the source of the documentation to ctan.
-
+  No longer use \cs{arabic} internally, to avoid problems with packages redefining the command. (Issue \#1).
+  
 \item[2011-03-17 (Version 1.7)] Changed definition of the triangle mover
     style. It now uses \packagename{tikz} and no longer
     \packagename{amssymb}. \packagename{chessboard} no longer loads
