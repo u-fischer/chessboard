@@ -41,16 +41,16 @@ tlmgr install babel babel-english babel-german hyph-utf8
 # class / content
 tlmgr install koma-script fancyhdr enumitem lipsum biblatex tcolorbox pgf marginnote
 tlmgr install enumitem listings xskak beamer media9 ocgx2 url geometry hyperref translator  amscls skak
-tlmgr update booktabs
+tlmgr install booktabs
 
 # other tools
 
 tlmgr install oberdiek etoolbox unicode-data  xpatch  amsmath filehook xkeyval lambda-lists xifthen ifmtarg
-tlmgr install ms csquotes showexpl fancyhdr caption animate  
+tlmgr install ms csquotes showexpl fancyhdr caption animate  zapfding symbol
 
 # fonts
 tlmgr install fontspec  microtype amsfonts gnu-free­font ec cm-super heuristica skaknew fix-cm
-tlmgr install chessfss psnfss eqparbox environ trimspaces luxi fourier zapfding
+tlmgr install chessfss psnfss eqparbox environ trimspaces luxi fourier 
 
 tlmgr pinning add tlcontrib 'luxi*'
 tlmgr install luxi
