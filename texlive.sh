@@ -49,7 +49,7 @@ tlmgr install ms csquotes showexpl fancyhdr caption animate
 
 # fonts
 tlmgr install fontspec  microtype amsfonts gnu-free­font ec cm-super heuristica skaknew fix-cm
-tlmgr install chessfss psnfss eqparbox environ trimspaces luxi fourier
+tlmgr install chessfss psnfss eqparbox environ trimspaces luxi fourier zapfding
 
 tlmgr pinning add tlcontrib 'luxi*'
 tlmgr install luxi
@@ -76,4 +76,3 @@ tlmgr option -- autobackup 0
 # Update the TL install but add nothing new
 tlmgr update --self --all --no-auto-install
 
-updmap-sys
