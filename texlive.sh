@@ -54,6 +54,9 @@ tlmgr install chessfss psnfss eqparbox environ trimspaces luxi fourier
 tlmgr pinning add tlcontrib 'luxi*'
 tlmgr install luxi
 
+tlmgr pinning add tlcontrib 'getnonfreefonts'
+tlmgr install getnonfreefonts
+
 # graphics
 tlmgr install  graphics graphics-def     duckuments
 
