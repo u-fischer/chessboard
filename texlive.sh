@@ -39,7 +39,7 @@ tlmgr install enumitem listings xskak beamer media9 ocgx2 url
 # other tools
 
 tlmgr install oberdiek etoolbox unicode-data  xpatch  amsmath filehook xkeyval lambda-lists xifthen ifmtarg
-tlmgr install ms csquotes showexpl fancyhdr caption animate
+tlmgr install ms csquotes showexpl fancyhdr caption animate  
 
 # fonts
 tlmgr install fontspec  microtype amsfonts gnu-free­font ec cm-super heuristica skaknew fix-cm
