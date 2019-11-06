@@ -34,7 +34,7 @@ tlmgr install babel babel-english babel-german hyph-utf8
 
 # class / content
 tlmgr install koma-script fancyhdr enumitem lipsum biblatex tcolorbox pgf tabularx marginnote
-tlmgr install enumitem listings chessboard xskak beamer media9 ocgx2 url
+tlmgr install enumitem listings xskak beamer media9 ocgx2 url
 
 # other tools
 
