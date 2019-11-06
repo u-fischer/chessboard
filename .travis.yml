@@ -12,13 +12,12 @@ script:
 - l3build install && l3build ctan -H --show-log-on-error
 
 deploy:
-- provider: releases
+  provider: releases
   api_key:
-    secure: oBkpeu+7YX24ZHoHGiNgtPMdxP0b0WMseWf+QhCUBd3EW7vHk96jv+35vwSypg9dhAyxLD94ndNEodkQIVlq8J19LCQeHi6BM+29jfxLAHp5fzYM30n77NwRZM3qmtvgrgU1ufV1r0OWDX0AIs9O5Yyj/GcYGb4RmUqPOxw6F1Qrf8UKzeDUSDT92ksC1dvmsKP5B4JSeTOxD60QDshonTI1ehW5f2gZdYn+8XBhs5g84wgytW1irKInXXl+J8cMaCp9L+a6vMvX1gME/yX/Kcr+DjhTqWG/elABTjPUP7ChrzfwvTQ+YSWyPiQVyClwsavW0/5tNBUNZe9Rs9dvOov0woORyV9nIF9dY6GAXBZujF9xOsrzXP8WMAOKloONOEmrfettJdVwodk2G47dgIHwxZkRjjkCQHqJ1PZ/rRA7ui0VhaYQOE7XbORcu+fOjli62ju9+m6aFU6jcLKuRPfORbV5BeQVtoMEO8TtpWOjszDS+8xv+Xy7Zz5P4lVFlnlfM3dhGBBQjWBAnc27n0I/e/ISgljquXWa7VUAbTYRHHIKzRdy4DUMsPfA8b4tal1abpgL2SXlYw8KexvrSS5XOoqddkKnBX6hKihSISdNVMQbCZLY1Fqfj7EyMk2UXy/dEzDNCImPTzIZFXwi5UUfOyKAwN2hCbVuHpUmX5c=
+    secure: M84jq+M4suyCDztoCM8NkYTr+26mzNi1scmaInmKTFFqxPg7fKk6ekDkBzkpfjLcQG3VKf6pHekDAYvO+EmMNvpMznSGkYyrZzc49yDRAuvsMyA1sEN5xXb0F85q+7S+ajeRRXIf+uF1u6xJB1XbBdYMRTn0EYQjIteuj9l8LvT//pW1CcXtGCbHTNO0PeW/y+5IS9syv6GURrdUJnFccuGLVvu1A6Ekg/edTULZtkTPzkqTaicsUa3JOB/BtfuLush3BfdTYeNyIXZ4yFxqvmaueF7uT+P9//LOSJXCmApiHCpqLCjLW1d5L1LFdRb+C/zlsv5jImMVvktWXBFghRkZSBMhvetM6R2gErGzNDA4XA6wZoxaU/6XXAiKjjJUXRokikQAnp26FFXdS84PPCCulueoLQ81UZ0BZM6PiKy+eF5Cj7XTBMUJgKRjX7hBKXDTEC3uLXWaY0Yu336FPc/yExf+hFZkH9fIXgXhqUvsOzaisKR2KC6ZUVPzdbquxm7kIbEV54UzcXaRfPc10wy/l2Wjl5x7R4qIdr+ZaHjpW3fvrQTR2BXlruWR2kLN7PLi9xmHygZtnJmjXfnDjXJ7w91x3nBfqlVcu1eysXLg/aiYx4XgHTQkw0YAxxrSYrbzAiPYpqs/PgWfArGCVBYMMhc9y66obD9PekCngB4=
   file_glob: true
-  file:
-  - build/distrib/ctan/*.zip
-  skip_cleanup: true
+  file: build/distrib/ctan/*.zip
   on:
+    repo: u-fischer/chessboard
     tags: true
   prerelease: true
