@@ -20,6 +20,12 @@ if ! command -v texlua > /dev/null; then
 fi
 
 tlmgr update --self
+
+if ! tlmgr repository list | grep -q tlcontrib; then
+  # Add TL contrib
+  tlmgr repository add http://contrib.texlive.info/current tlcontrib
+fi
+
 # Needed for any use of texlua even if not testing LuaTeX
 # kernel
 tlmgr install l3kernel l3packages l3build latex latex-bin ctablestack  l3experimental l3backend tools
@@ -33,8 +39,8 @@ tlmgr install luacode luatex luatexbase luaotfload iftex
 tlmgr install babel babel-english babel-german hyph-utf8 
 
 # class / content
-tlmgr install koma-script fancyhdr enumitem lipsum biblatex tcolorbox pgf tabularx marginnote
-tlmgr install enumitem listings xskak beamer media9 ocgx2 url geometry hyperref translator  amscls
+tlmgr install koma-script fancyhdr enumitem lipsum biblatex tcolorbox pgf marginnote
+tlmgr install enumitem listings xskak beamer media9 ocgx2 url geometry hyperref translator  amscls skak
 
 # other tools
 
@@ -44,6 +50,9 @@ tlmgr install ms csquotes showexpl fancyhdr caption animate
 # fonts
 tlmgr install fontspec  microtype amsfonts gnu-free­font ec cm-super heuristica skaknew fix-cm
 tlmgr install chessfss psnfss eqparbox environ trimspaces luxi fourier
+
+tlmgr pinning add tlcontrib 'luxi*'
+tlmgr install luxi
 
 # graphics
 tlmgr install  graphics graphics-def     duckuments
