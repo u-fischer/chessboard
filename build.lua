@@ -46,7 +46,7 @@ uploadconfig = {
 
 docfiledir="./doc"
 docfiles = {"UF-chessboard-documentation.sty","file.fen","brett.jpg",
-            "chessboard-skakps.pdf","chessboard-skakps.tex","pzdr.tfm"}
+            "chessboard-skakps.pdf","chessboard-skakps.tex"}
 typesetdemofiles ={"chessboard_and_beamer.tex"}
 
 textfiles= {"doc/ctanreadme.md"}

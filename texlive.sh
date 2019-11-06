@@ -50,7 +50,7 @@ tlmgr install ms csquotes showexpl fancyhdr caption animate  zapfding symbol
 
 # fonts
 tlmgr install fontspec  microtype amsfonts gnu-free­font ec cm-super heuristica skaknew fix-cm
-tlmgr install chessfss psnfss eqparbox environ trimspaces luxi fourier 
+tlmgr install chessfss psnfss eqparbox environ trimspaces luxi fourier helvetic
 
 tlmgr pinning add tlcontrib 'luxi*'
 tlmgr install luxi
