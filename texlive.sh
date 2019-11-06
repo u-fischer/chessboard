@@ -41,7 +41,7 @@ tlmgr install babel babel-english babel-german hyph-utf8
 # class / content
 tlmgr install koma-script fancyhdr enumitem lipsum biblatex tcolorbox pgf marginnote
 tlmgr install enumitem listings xskak beamer media9 ocgx2 url geometry hyperref translator  amscls skak
-tlmgr install booktabs varwidth
+tlmgr install booktabs varwidth attachfile
 
 # other tools
 
