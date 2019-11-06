@@ -22,19 +22,19 @@ fi
 tlmgr update --self
 # Needed for any use of texlua even if not testing LuaTeX
 # kernel
-tlmgr install l3kernel l3packages l3build latex latex-bin ctablestack  l3experimental l3backend
+tlmgr install l3kernel l3packages l3build latex latex-bin ctablestack  l3experimental l3backend tools
 
-tlmgr install collection-langgerman
+tlmgr install collection-langgerman 
 
 # luatex
 tlmgr install luacode luatex luatexbase luaotfload iftex
 
 # language
-tlmgr install babel babel-english babel-german hyph-utf8
+tlmgr install babel babel-english babel-german hyph-utf8 
 
 # class / content
 tlmgr install koma-script fancyhdr enumitem lipsum biblatex tcolorbox pgf tabularx marginnote
-tlmgr install enumitem listings xskak beamer media9 ocgx2 url geometry hyperref translator enumerate
+tlmgr install enumitem listings xskak beamer media9 ocgx2 url geometry hyperref translator 
 
 # other tools
 
