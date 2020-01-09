@@ -1,0 +1,7 @@
+\input{regression-test}
+\documentclass{article}
+\usepackage[T2A]{fontenc}
+
+\begin{document}
+blub
+\end{document}
