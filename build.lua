@@ -3,8 +3,8 @@
 -- Build script for "chessboard" bundle
 
 -- Identify the bundle and module
-packageversion= "1.8"
-packagedate   = "2019-06-23"
+packageversion= "1.9"
+packagedate   = "2020-11-01"
 
 module   = "chessboard"
 ctanpkg  = "chessboard"
@@ -30,18 +30,18 @@ uploadconfig = {
   bugtracker = mydata.github .. "chessboard/issues",
   support    = mydata.github .. "chessboard/issues",
   uploader = mydata.name,
-  email    = mydata.email, 
+  email    = mydata.email,
   update   = true ,
   topic=    {"games"},
   note     = [[Uploaded automatically by l3build... description is unchanged despite the missing linebreaks, authors are unchanged]],
-  description=[[This package offers commands to print chessboards. 
-                It can print partial boards, hide pieces and fields, color the boards 
-                and put various marks on the board. It has a lot of options to place 
+  description=[[This package offers commands to print chessboards.
+                It can print partial boards, hide pieces and fields, color the boards
+                and put various marks on the board. It has a lot of options to place
                 pieces on the board. Using exotic pieces (e.g., for fairy chess) is possible.
-                The documentation includes an example of an animated chessboard, 
+                The documentation includes an example of an animated chessboard,
                 for those whose PDF viewer can display animations.
               ]],
-  announcement_file="ctan.ann"             
+  announcement_file="ctan.ann"
 }
 
 docfiledir="./doc"
@@ -55,14 +55,14 @@ ctanreadme= "ctanreadme.md"
 typesetexe = "pdflatex"
 packtdszip   = false
 installfiles = {
-                "chessboard.sty", "chessboard-keys-main.sty", 
+                "chessboard.sty", "chessboard-keys-main.sty",
                 "chessboard-keys-pgf.sty","chessboard-pgf.sty"
-               }  
-               
+               }
+
 sourcefiles  = {
                 "*.dtx","*.ins"
                }
-                            
+
 typesetfiles = {"chessboard.tex"}
 
 typesetruns = 2
@@ -78,48 +78,47 @@ tagfiles = {"*.dtx",
 function update_tag (file,content,tagname,tagdate)
  tagdate = string.gsub (packagedate,"-", "/")
  if string.match (file, "%.dtx$" ) then
-  content = string.gsub (content,  
+  content = string.gsub (content,
                          "\\ProvidesFile{(.-)}%[%d%d%d%d%/%d%d%/%d%d version v%d%.%d",
                          "\\ProvidesFile{%1}[" .. tagdate.." version v"..packageversion)
-  content = string.gsub (content,  
+  content = string.gsub (content,
                          "\\ProvidesPackage{(.-)}%[%d%d%d%d%/%d%d%/%d%d version v%d%.%d",
-                         "\\ProvidesPackage{%1}[" .. tagdate.." version v"..packageversion)                       
-  return content  
+                         "\\ProvidesPackage{%1}[" .. tagdate.." version v"..packageversion)
+  return content
   elseif string.match (file, "^README.md$") then
-   content = string.gsub (content,  
+   content = string.gsub (content,
                          "Version: %d%.%d+",
                          "Version: " .. packageversion )
-   content = string.gsub (content,  
+   content = string.gsub (content,
                          "version%-%d%.%d+",
-                         "version-" .. packageversion ) 
-   content = string.gsub (content,  
+                         "version-" .. packageversion )
+   content = string.gsub (content,
                          "for %d%.%d+",
-                         "for " .. packageversion ) 
-   content = string.gsub (content,  
+                         "for " .. packageversion )
+   content = string.gsub (content,
                          "%d%d%d%d%-%d%d%-%d%d",
                          packagedate )
-   local imgpackagedate = string.gsub (packagedate,"%-","--")                          
-   content = string.gsub (content,  
+   local imgpackagedate = string.gsub (packagedate,"%-","--")
+   content = string.gsub (content,
                          "%d%d%d%d%-%-%d%d%-%-%d%d",
-                         imgpackagedate)                                                                                                     
-   return content                                                   
+                         imgpackagedate)
+   return content
   elseif string.match (file, "%.md$") then
-   content = string.gsub (content,  
+   content = string.gsub (content,
                          "Packageversion: %d%.%d+",
                          "Packageversion: " .. packageversion )
-   content = string.gsub (content,  
+   content = string.gsub (content,
                          "Packagedate: %d%d%d%d%-%d%d%-%d%d",
-                         "Packagedate: " .. packagedate )                      
-   return content                   
+                         "Packagedate: " .. packagedate )
+   return content
  elseif string.match (file, "%.tex$" ) then
-   content = string.gsub (content,  
+   content = string.gsub (content,
                          "UFcurrentversion{%d%.%d+}",
                          "UFcurrentversion{" .. packageversion .."}" )
-   content = string.gsub (content,  
+   content = string.gsub (content,
                          "UFcurrentversiondate{%d%d%d%d-%d%d-%d%d}",
-                         "UFcurrentversiondate{" .. packagedate .."}" )                      
-   return content   
+                         "UFcurrentversiondate{" .. packagedate .."}" )
+   return content
  end
  return content
  end
-

@@ -1,7 +1,6 @@
 %<*chessboard>
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{chessboard}[2019/06/23 version v1.8 print chessboards]
-%%$Date: 2011/03/23 08:42:57 $$Version: 66142533647c $
+\ProvidesPackage{chessboard}[2020/11/01 version v1.9 print chessboards]
 
 %1.4: Changed to restore style key
 %1.5: corrected values for mover key (w/b instead of w/s)
@@ -9,6 +8,7 @@
 % 14.3.2011: added \normallineskip=1pt\relax\normallineskiplimit=0pt\relax
 %            (default latex values).
 %            to avoid bad spacing in amsart.cls (see tex.stackexchange discussion)
+% 1.9. corrected area code, lists not always correctly processed
 \DeclareOption{skaknew}{}%
 \ProcessOptions
 
@@ -1436,7 +1436,7 @@
 
 %</chessboard>
 %<*chessboard-pgf>
-\ProvidesFile{chessboard-pgf.sty}[2019/06/23 version v1.8 pgf code for chessboard.sty]
+\ProvidesFile{chessboard-pgf.sty}[2020/11/01 version v1.9 pgf code for chessboard.sty]
 %%$Date: 2011/01/11 14:07:20 $$Version: 3d9f59c743f1 $
 
 \newcommand\board@pgf@extrabackground{}%
@@ -2553,7 +2553,7 @@
 
 %</chessboard-pgf>
 %<*chessboard-keys-main>
-\ProvidesFile{chessboard-keys-main.sty}[2019/06/23 version v1.8 key definitions for chessboard.sty]
+\ProvidesFile{chessboard-keys-main.sty}[2020/11/01 version v1.9 key definitions for chessboard.sty]
 %%$Date: 2011/03/23 08:42:57 $$Version: 66142533647c $
 
 %%file=Linie=column=vertikal=al_f_abetisch= a-h
@@ -3475,7 +3475,7 @@
   {\board@do@cleararea{\board@temp@curarea}}}%
 
 \define@key[UFCB]{glofill}{cleararea}{% D
-  \board@do@l@addto@macro\board@val@savedkeylist{,cleararea=#1}}%
+  \board@do@l@addto@macro\board@val@savedkeylist{,cleararea={#1}}}%
 
 \define@key[UFCB]{locfill}{clearareas}{% D
   \edef\board@temp@list{#1}%
@@ -3483,7 +3483,7 @@
   {\board@do@cleararea{\board@temp@curarea}}}%
 
 \define@key[UFCB]{glofill}{clearareas}{% D
-  \board@do@l@addto@macro\board@val@savedkeylist{,clearareas=#1}}%
+  \board@do@l@addto@macro\board@val@savedkeylist{,clearareas={#1}}}%
 
 \define@key[UFCB]{locfill}{clearboard}[true]{%D
    \edef\board@temp@curstartfield{\board@val@minfilechar\board@val@maxranknum}%
@@ -3561,7 +3561,7 @@
   \board@do@hidearea{#1}}%
 
 \define@key[UFCB]{glofill}{hidearea}{% D
-  \board@do@l@addto@macro\board@val@savedkeylist{,hidearea=#1}}%
+  \board@do@l@addto@macro\board@val@savedkeylist{,hidearea={#1}}}%
 
 \define@key[UFCB]{locfill}{hideareas}{% D
   \edef\board@temp@list{#1}%
@@ -3569,7 +3569,7 @@
   {\board@do@hidearea{\board@temp@curarea}}}%
 
 \define@key[UFCB]{glofill}{hideareas}{% D
-  \board@do@l@addto@macro\board@val@savedkeylist{,hideareas=#1}}%
+  \board@do@l@addto@macro\board@val@savedkeylist{,hideareas={#1}}}%
 
 \define@key[UFCB]{locfill}{hideboard}[true]{% D
    \edef\board@temp@curstartfield{\board@val@minfilechar\board@val@maxranknum}%
@@ -3683,7 +3683,7 @@
   \board@do@showarea{#1}}%
 
 \define@key[UFCB]{glofill}{showarea}{%
-  \board@do@l@addto@macro\board@val@savedkeylist{,showarea=#1}}%
+  \board@do@l@addto@macro\board@val@savedkeylist{,showarea={#1}}}%
 
 \define@key[UFCB]{locfill}{showareas}{% D
   \edef\board@temp@list{#1}%
@@ -3691,7 +3691,7 @@
   {\board@do@showarea{\board@temp@curarea}}}%
 
 \define@key[UFCB]{glofill}{showareas}{% D
-  \board@do@l@addto@macro\board@val@savedkeylist{,showareas=#1}}%
+  \board@do@l@addto@macro\board@val@savedkeylist{,showareas={#1}}}%
 
 \define@key[UFCB]{locfill}{showboard}[true]{%
   \edef\board@temp@curstartfield{\board@val@minfilechar\board@val@maxranknum}%
@@ -3785,7 +3785,7 @@
   \let\board@val@startfenranknum\board@temp@curranknum}%
 
 \define@key[UFCB]{glofill}{startfen}{% D
-  \board@do@l@addto@macro\board@val@savedkeylist{,startfen=#1}}%
+  \board@do@l@addto@macro\board@val@savedkeylist{,startfen={#1}}}%
 
 \define@key[UFCB]{locfill}{startfill}{% D
   \expandafter\board@split@field#1ARGEND%
@@ -3794,7 +3794,7 @@
   \let\board@val@startfillranknum\board@temp@curranknum}%
 
 \define@key[UFCB]{glofill}{startfill}{% D
-  \board@do@l@addto@macro\board@val@savedkeylist{,startfill=#1}}%
+  \board@do@l@addto@macro\board@val@savedkeylist{,startfill={#1}}}%
 
 \define@key[UFCB]{locfill}{stopfill}{% D
   \expandafter\board@split@field#1ARGEND%
@@ -3803,7 +3803,7 @@
   \let\board@val@stopfillranknum\board@temp@curranknum}%
 
 \define@key[UFCB]{glofill}{stopfill}{% D
-  \board@do@l@addto@macro\board@val@savedkeylist{,startfill=#1}}%
+  \board@do@l@addto@macro\board@val@savedkeylist{,startfill={#1}}}%
 
 \define@key[UFCB]{locfill}{fillarea}{% a7-f1 %D
     \expandafter\board@split@areasort#1ARGEND%
@@ -3811,7 +3811,7 @@
       startfill=\board@temp@curstartfield, stopfill=\board@temp@curstopfield}}%
 
 \define@key[UFCB]{glofill}{fillarea}{% D
-    \board@do@l@addto@macro\board@val@savedkeylist{,fillarea=#1}}%
+    \board@do@l@addto@macro\board@val@savedkeylist{,fillarea={#1}}}%
 
 %%%
 %% setting pieces with fen
@@ -3986,7 +3986,7 @@
   \board@do@empharea{#1}}%
 
 \define@key[UFCB]{glofill}{empharea}{% D
-  \board@do@l@addto@macro\board@val@savedkeylist{,empharea=#1}}%
+  \board@do@l@addto@macro\board@val@savedkeylist{,empharea={#1}}}%
 
 \define@key[UFCB]{locfill}{emphareas}{% D
  \XKV@sp@deflist\board@templist{#1}%
@@ -4020,7 +4020,7 @@
 
 \define@key[UFCB]{locfill}{emphrank}{% D
     \board@do@setsinglekeys*[UFCB]{locfill}{%
-      emphranks=#1}}%
+      emphranks={#1}}}%
 
 \define@key[UFCB]{glofill}{emphrank}{%D
   \board@do@l@addto@macro\board@val@savedkeylist{,emphrank={#1}}}%
@@ -4038,10 +4038,10 @@
 
 \define@key[UFCB]{locfill}{emphfile}{% D
     \board@do@setsinglekeys*[UFCB]{locfill}{%
-      emphfiles=#1}}%
+      emphfiles={#1}}}%
 
 \define@key[UFCB]{glofill}{emphfile}{%D
-  \board@do@l@addto@macro\board@val@savedkeylist{,emphfile=#1}}%
+  \board@do@l@addto@macro\board@val@savedkeylist{,emphfile={#1}}}%
 
 \define@key[UFCB]{locfill}{emphfields}{% D
   \edef\board@temp@list{#1}%
@@ -4054,10 +4054,10 @@
 
 \define@key[UFCB]{locfill}{emphfield}{% D
     \board@do@setsinglekeys*[UFCB]{locfill}{%
-      emphfields=#1}}%
+      emphfields={#1}}}%
 
 \define@key[UFCB]{glofill}{emphfield}{%D
-  \board@do@l@addto@macro\board@val@savedkeylist{,emphfield=#1}}%
+  \board@do@l@addto@macro\board@val@savedkeylist{,emphfield={#1}}}%
 
 \define@key[UFCB]{locfill}{colorpieces}{% D
   \PackageWarning{chessboard}{The key colorpieces doesn't work anymore. \MessageBreak
@@ -4078,7 +4078,7 @@
 
 %</chessboard-keys-main>
 %<*chessboard-keys-pgf>
-\ProvidesFile{chessboard-keys-pgf.sty}[2019/06/23 version v1.8 key definitions for chessboard.sty]
+\ProvidesFile{chessboard-keys-pgf.sty}[2020/11/01 version v1.9 key definitions for chessboard.sty]
 %%$Date: 2011/03/17 13:42:38 $$Version: e7ec1b100ede $
 
 %% new 1.5.: style keys for curvemove
@@ -4302,7 +4302,7 @@
   \fi}%
 
 \define@key[UFCB]{glofill}{trimarea}{%
-    \board@do@l@addto@macro\board@val@savedkeylist{,trimarea=#1}}%
+    \board@do@l@addto@macro\board@val@savedkeylist{,trimarea={#1}}}%
 
 \define@boolkey[UFCB]{locfill}{captrimtoprint}[true]{}%
 
@@ -5007,14 +5007,14 @@
   \board@do@l@addto@macro\board@val@savedkeylist{,applycolor=#1}}%
 
 \define@key[UFCB]{locfill}{colorbackarea}{% D
-  \board@do@setsinglekeys*[UFCB]{locfill}{colorbackareas=#1}}%
+  \board@do@setsinglekeys*[UFCB]{locfill}{colorbackareas={#1}}}%
 
 \define@key[UFCB]{glofill}{colorbackarea}{% D
-  \board@do@l@addto@macro\board@val@savedkeylist{,colorbackarea=#1}}%
+  \board@do@l@addto@macro\board@val@savedkeylist{,colorbackarea={#1}}}%
 
 \define@key[UFCB]{locfill}{colorbackareas}{% D
  \let\board@pgf@savebackstyle\board@pgf@curbackstyle
- \board@do@setsinglekeys*[UFCB]{locfill}{backstyle=color,backareas=#1,backstyle=\board@pgf@savebackstyle}}%
+ \board@do@setsinglekeys*[UFCB]{locfill}{backstyle=color,backareas={#1},backstyle=\board@pgf@savebackstyle}}%
 
 \define@key[UFCB]{glofill}{colorbackareas}{% D
   \board@do@l@addto@macro\board@val@savedkeylist{,colorbackareas={#1}}}%
@@ -5048,7 +5048,7 @@
 
 \define@key[UFCB]{locfill}{colorbackrank}{% D
     \board@do@setsinglekeys*[UFCB]{locfill}{%
-      colorbackranks=#1}}%
+      colorbackranks={#1}}}%
 
 \define@key[UFCB]{glofill}{colorbackrank}{%D
   \board@do@l@addto@macro\board@val@savedkeylist{,colorbackrank={#1}}}%
@@ -5066,7 +5066,7 @@
 
 \define@key[UFCB]{locfill}{colorbackfile}{% D
     \board@do@setsinglekeys*[UFCB]{locfill}{%
-      colorbackfiles=#1}}%
+      colorbackfiles={#1}}}%
 
 \define@key[UFCB]{glofill}{colorbackfile}{%D
   \board@do@l@addto@macro\board@val@savedkeylist{,colorbackfile={#1}}}%
@@ -5124,11 +5124,11 @@
 \define@key[UFCB]{locfill}{pgfborder}[\printarea]{%
  \edef\board@pgf@savebackstyle{\board@pgf@curbackstyle}%
  \board@do@setsinglekeys*[UFCB]{locfill}{%
-   backstyle=border,backregions=#1}%
+   backstyle=border,backregions={#1}}%
   \expandafter\board@do@setsavedkey\expandafter{\board@pgf@savebackstyle}{backstyle}}%
 
 \define@key[UFCB]{glofill}{pgfborder}[\printarea]{% %D
-    \board@do@l@addto@macro\board@val@savedkeylist{,pgfborder=#1}}%
+    \board@do@l@addto@macro\board@val@savedkeylist{,pgfborder={#1}}}%
 
 
 %</chessboard-keys-pgf>

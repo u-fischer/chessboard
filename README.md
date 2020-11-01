@@ -2,8 +2,8 @@
 
 Ulrike Fischer 2006-2019
 
-![Version: 1.8](https://img.shields.io/badge/current_version-1.8-blue.svg?style=flat-square)
-![Date: 2019-06-23](https://img.shields.io/badge/date-2019--06--23-blue.svg?style=flat-square)
+![Version: 1.9](https://img.shields.io/badge/current_version-1.9-blue.svg?style=flat-square)
+![Date: 2020-11-01](https://img.shields.io/badge/date-2020--11--01-blue.svg?style=flat-square)
 [![License: LPPL1.3c ](https://img.shields.io/badge/license-LPPL1.3c-blue.svg?style=flat-square)](https://ctan.org/license/lppl1.3c)
 
 

@@ -2,15 +2,17 @@
 % -*- mode: TeX -*- -*- coding: UTF-8 -*-
 \listfiles
 \def\UFcurrentpackage{chessboard}
-\def\UFcurrentversion{1.8}
+\def\UFcurrentversion{1.9}
 %$Date$$Version$
-
+\RequirePackage{l3pdf}
+\ExplSyntaxOn
+\pdf_uncompress:
+%\pdf_version_gset:n{2.0}
+\ExplSyntaxOff
 
 \RequirePackage{fix-cm}
 
 \documentclass[pagesize,parskip=half-,fontsize=12pt]{scrartcl}
-\usepackage[utf8]{inputenc}
-
 %% chessboard specific commands
 \usepackage[LSB1,LSB2, LSB3,LSBC2,LSBC3,LSBC4,LSBC5, T1]{fontenc}
 %\usepackage[skak-parse]{xskak}
@@ -123,6 +125,9 @@ pictures. So it could be necessary to reset the padding. And the
 the foreground picture.
 
 \begin{description}
+\item[2020-11-01 (Version 1.9)] Corrected a bug reported by 
+  Phelype Oleinik. \texttt{colorbackareas} (and other area keys) didn't process lists of areas correctly.
+
 \item[2019-06-23 (Version 1.8)] Uploaded the source of the documentation to ctan.
   No longer use \cs{arabic} internally, to avoid problems with packages redefining the command. (Issue \#1).
 
@@ -3702,7 +3707,7 @@ of a game  with \skaksty and then to loop through them. For an
 example please read the documentation of \packagename{xskak}. Here an
 example of the more tiresome input:
 
-\begin{LTXexample}
+\begin{lstlisting}
 \newchessgame
 \unitlength1pt
 \newcommand\currentboard{%
@@ -3724,7 +3729,7 @@ example of the more tiresome input:
 \newframe\hidemoves{3... a6}%
 \currentboard
 \end{animateinline}
-\end{LTXexample}
+\end{lstlisting}
 
 
 \phantomsection

@@ -1,5 +1,4 @@
-In version 1.8
-- the source of the documentation has been added, so that it now can be included
-  in texlive 
-- issue #1 has been handled.
+In version 1.9
+- Corrected a bug reported by Phelype Oleinik: colorbackareas (and other area keys) didn't process lists of areas correctly.
+
 
