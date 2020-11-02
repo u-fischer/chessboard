@@ -1,5 +1,5 @@
 # chessboard --- A package to print chessboards
-Packageversion: 1.9 Ulrike Fischer 2019
+Packageversion: 1.9 Ulrike Fischer 2020
 Packagedate: 2020-11-01
 
 ## LICENSE
@@ -7,6 +7,8 @@ LaTeX Project Public License
 
 
 ## CHANGES
+1.9: Corrected a bug. colorbackareas (and other area keys) didn't process 
+     lists of areas correctly.
 1.8: no longer uses \arabic to avoid problems with pages which redefine it.
      Added source of documentation. 
 1.7: chessboard no longer loads amssymb (to avoid clashes)
