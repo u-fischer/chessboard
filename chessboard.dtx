@@ -1549,6 +1549,11 @@
    \board@pgf@setanchors{mark}}%
 
 %% getting angles/length of a point:
+%% the board len can be a decimal, so we need a better function than the primitive divide
+\ExplSyntaxOn
+\newcommand\board@divide@NN[2]{%
+ \dim_set:Nn#1 {#1*\dim_ratio:nn{1pt}{#2}}}%
+\ExplSyntaxOff
 
 \newcommand\board@pgf@extractangle[2]{%#1 command, #2 pgfpoint
    \pgfextracty{\len@board@tempy}{#2}%
@@ -1556,7 +1561,7 @@
   \ifdim\len@board@tempx=0pt\relax
   %\len@board@tempy= 1 or unchanged?
   \else
-   \divide \len@board@tempy by \strip@pt\len@board@tempx\relax
+    \board@divide@NN\len@board@tempy\len@board@tempx
   \fi
    \ifdim\len@board@tempx=0pt\relax
      \ifdim\len@board@tempy=0pt\relax
