@@ -2381,17 +2381,17 @@ can be use with \verb+#2+:
      {\pgftext[#2]{\normalfont\board@pgf@curtext}}}%
 \end{lstlisting}
 
-A definition use ti\textit{k}z-commands could be 
+A definition could also use ti\textit{k}z-commands  
 \begin{lstlisting}
 \cbDefinePgfMoveStyle{moveto}{\draw[->,#2](0,0)--(#1);} 
 \end{lstlisting}
-and then used like this
+and then be used like this
 
 \cbDefinePgfMoveStyle{moveto}{\draw[->,#2](0,0)--(#1);} 
 \begin{LTXexample}
 \newchessgame
 \chessboard[    
-    pgfstyle={[red,thick,dashed]moveto},
+    pgfstyle={[red, very thick,dashed]moveto},
     markmove=e2-e4,
     ]
 \end{LTXexample}
