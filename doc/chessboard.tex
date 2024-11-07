@@ -2,13 +2,13 @@
 % -*- mode: TeX -*- -*- coding: UTF-8 -*-
 \listfiles
 \def\UFcurrentpackage{chessboard}
-\def\UFcurrentversion{1.9}
+\def\UFcurrentversion{2.0}
 %$Date$$Version$
-\RequirePackage{l3pdf}
-\ExplSyntaxOn
-\pdf_uncompress:
-%\pdf_version_gset:n{2.0}
-\ExplSyntaxOff
+%\ExplSyntaxOn 
+%\sys_ensure_backend:
+%\pdf_uncompress: 
+%%\pdf_version_gset:n{2.0}
+%\ExplSyntaxOff
 
 \RequirePackage{fix-cm}
 
@@ -125,6 +125,9 @@ pictures. So it could be necessary to reset the padding. And the
 the foreground picture.
 
 \begin{description}
+\item[2024-11-07 (Version 2.0)] The background and foreground pictures are now
+ti\textit{k}z-pictures and no longer basic pgf-pictures. This allows to use all ti\textit{k}z-commands and so makes drawing and style definitions easier. 
+  
 \item[2020-11-01 (Version 1.9)] Corrected a bug reported by 
   Phelype Oleinik. \texttt{colorbackareas} (and other area keys) didn't process lists of areas correctly.
 
@@ -570,7 +573,7 @@ other:
 
 \minisec{1. The background layer}
 
-This is a pgf-picture that lies under the board. It can be used for
+This is a ti\textit{k}z-picture that lies under the board. It can be used for
 background colors or fancy borders or other background decoration.
 %Coloring or drawing something in this layers means adding a color
 %command or pgf commands to the code of the picture. How to do this
@@ -584,12 +587,12 @@ Labels, movers and figures are all build together in this layer.
 
 \minisec{3. The mark layer}
 
-This layer is again a pgf picture now over the board. It can be used
+This layer is again a ti\textit{k}z-picture now over the board. It can be used
 to draw crosses, arrows etc on the board.
 
 The sections \ref{startmain} to \ref{stopmain} describe how to
 manipulate the main layer. The section \ref{startpgf} describes
-how to handle the pgf pictures.
+how to handle the ti\textit{k}z-picture.
 
 
 
@@ -2035,12 +2038,6 @@ added as they are simple combinations of the existing keys:
 
 %\section{Coloring and emphasizing the board chars}
 
-{\bfseries You must load a color package like \packagename{xcolor} or
-\packagename{color} to be able to use colors!}\footnote{I must
-correct myself: the pgf-package will load \packagename{xcolor}, so
-you should load a color package only if you want to use it with other
-options.}
-
 Coloring and decorating  the board is a bit complicated as there is
 so much that can get different colors and so much different
 possibilities for marks, arrows, fancy borders and so on. So it can
@@ -2068,33 +2065,29 @@ So I decided to use \packagename{pgf} to implement my own
 highlighting commands. But I also tried to offer a possibility to use
 the commands of \skaksty.
 
-The pgf-commands  used by \pchessboard need only
-\packagename{pgfcore.sty} and \packagename{pgfbaseshapespackage.sty}
-from the \packagename{pgf}-bundle. If you need pgf-commands from
-other parts of the bundle, you will have to load the styles yourself.
+The package only loads the package \packagename{tikz}. If you want to use
+additional libraries you have to load them yourself. 
 
 \Describesetkey{pgf}{true|false}{}{true}
 
-Pgf-commands works fine with \LaTeX\ and pdf\LaTeX\ but in some case
+ti\textit{k}z-commands works fine with \LaTeX\ and pdf\LaTeX\ but in some case
 (e.g.\ if you use \cs{chessboard} in an environment that calls the
 environment \texttt{preview}) they can induce errors. So I added a
-key to disable all the pgf-commands. It is also useful to disable
+key to disable all the ti\textit{k}z-commands. It is also useful to disable
 most of the highlighting.
 
 
 
 
 
-\subsection{The  pgf-pictures}
+\subsection{The  ti\textit{k}z-pictures}
 The decorations in the two other layers (background layer and mark
-layer) use pgf-commands -- or to be more precise: the two other
-layers are pgf-pictures.
+layer) use pgf/ti\textit{k}z-commands -- or to be more precise: the two other
+layers are ti\textit{k}z-pictures.
 
-
-
-
-In the first version of \pchessboard the background picture wasn't
-used much. I had only implemented some code to color the fields. But
+In the first version of \pchessboard the pictures where pgf-pictures and not 
+ti\textit{k}z-pictures. Also the background picture wasn't
+used much: I had only implemented some code to color the fields. But
 then I got the request to add some more commands for fancy borders
 which did mean that I had to transfer the code which draws borders in
 the foreground picture to the background picture. And I got a request
@@ -2111,6 +2104,8 @@ I also tried to unify the keys that affect the pgf-pictures, to
 improve the possibilities for the user to  control which pgf-picture
 is affected and put a bit more order in the keys. At the end quite a
 lot of the code has been rearranged and changed.
+
+Finally a number of questions came up how to adapt the styles and I realized that restricting the picture to the basic layer pgf-commands makes it harder than necessary and that today the additional compilation time and memory use for full ti\textit{k}z support no long matters. So this was changed too.
 
 
 \subsubsection{Naming of the pgf related keys}
@@ -2343,24 +2338,13 @@ curvemove &      &           & \ding{52}\\
 \DescribeMacro{\cbDefinePgfFieldStyle}
 \DescribeMacro{\cbDefinePgfRegionStyle}
 \DescribeMacro{\cbDefinePgfMoveStyle}
-With this commands you can define your own styles. The commands take
+With these commands you can define your own styles. The commands take
 two argument: the first is the name of the style, the second should
-be the pgf-commands needed to draw.
-
-In previous version of the package the commands were called.
-\cs{cbDefineMarkFieldStyle}%
-\index{cbDefineMarkF=\textbackslash cbDefineMarkFieldStyle (obsolete)|see{\textbackslash cbDefinePgfFieldStyle}},
-\cs{cbDefineMarkRegionStyle}%
-\index{cbDefineMarkR=\textbackslash cbDefineMarkRegionStyle (obsolete) |see{\textbackslash cbDefinePgfRegionStyle}}
-and \cs{cbDefineMarkMoveStyle}%
-\index{cbDefineMarkM=\textbackslash cbDefineMarkMoveStyle (obsolete) |see{\textbackslash cbDefinePgfMoveStyle}}.
-%
-I have changed the names to indicate that the commands will define
-the styles for the background picture too. The older commands still
-work  but I suggest that you switch to the new names.
+be the pgf-commands or ti\textit{k}z-commands needed to draw.
 
 
-The listing shows first an example for a field mark, then an example
+The next listing shows two style definition using basic pgf-commands. 
+At first an example for a field mark, then an example
 for a region where the second corner is accessed through the
 \lstinline+#1+,
 and at last the definition for the text mark -- here it is necessary
@@ -2396,6 +2380,21 @@ can be use with \verb+#2+:
      {\pgftext[rotate=180,#2]{\normalfont\board@pgf@curtext}}%
      {\pgftext[#2]{\normalfont\board@pgf@curtext}}}%
 \end{lstlisting}
+
+A definition use ti\textit{k}z-commands could be 
+\begin{lstlisting}
+\cbDefinePgfMoveStyle{moveto}{\draw[->,#2](0,0)--(#1);} 
+\end{lstlisting}
+and then used like this
+
+\cbDefinePgfMoveStyle{moveto}{\draw[->,#2](0,0)--(#1);} 
+\begin{LTXexample}
+\newchessgame
+\chessboard[    
+    pgfstyle={[red,thick,dashed]moveto},
+    markmove=e2-e4,
+    ]
+\end{LTXexample}
 
 \subsubsection{Introduction to the predefined pgf styles}
 

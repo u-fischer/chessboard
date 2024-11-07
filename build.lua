@@ -3,8 +3,8 @@
 -- Build script for "chessboard" bundle
 
 -- Identify the bundle and module
-packageversion= "1.9"
-packagedate   = "2020-11-01"
+packageversion= "2.0"
+packagedate   = "2024-11-07"
 
 module   = "chessboard"
 ctanpkg  = "chessboard"
@@ -46,7 +46,8 @@ uploadconfig = {
 
 docfiledir="./doc"
 docfiles = {"UF-chessboard-documentation.sty","file.fen","brett.jpg",
-            "chessboard-skakps.pdf","chessboard-skakps.tex"}
+            "chessboard-skakps.pdf","chessboard-skakps.tex",            
+            }
 typesetdemofiles ={"chessboard_and_beamer.tex"}
 
 textfiles= {"doc/ctanreadme.md"}

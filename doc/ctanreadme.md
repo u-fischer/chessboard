@@ -1,6 +1,6 @@
 # chessboard --- A package to print chessboards
-Packageversion: 1.9 Ulrike Fischer 2020
-Packagedate: 2020-11-01
+Packageversion: 2.0 Ulrike Fischer 2020
+Packagedate: 2024-11-07
 
 ## LICENSE
 LaTeX Project Public License

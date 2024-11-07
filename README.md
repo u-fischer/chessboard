@@ -1,9 +1,9 @@
 # chessboard — Print chess boards
 
-Ulrike Fischer 2006-2019
+Ulrike Fischer 2006-2024
 
-![Version: 1.9](https://img.shields.io/badge/current_version-1.9-blue.svg?style=flat-square)
-![Date: 2020-11-01](https://img.shields.io/badge/date-2020--11--01-blue.svg?style=flat-square)
+![Version: 2.0](https://img.shields.io/badge/current_version-2.0-blue.svg?style=flat-square)
+![Date: 2024-11-07](https://img.shields.io/badge/date-2024--11--07-blue.svg?style=flat-square)
 [![License: LPPL1.3c ](https://img.shields.io/badge/license-LPPL1.3c-blue.svg?style=flat-square)](https://ctan.org/license/lppl1.3c)
 
 

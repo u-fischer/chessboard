@@ -1,6 +1,6 @@
 %<*chessboard>
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{chessboard}[2020/11/01 version v1.9 print chessboards]
+\ProvidesPackage{chessboard}[2024/11/07 version v2.0 print chessboards]
 
 %1.4: Changed to restore style key
 %1.5: corrected values for mover key (w/b instead of w/s)
@@ -1114,12 +1114,12 @@
 %% the background picture
    \ifUFCB@locset@pgf
     \makebox[0pt]{%
-     \begin{pgfpicture}%
+     \begin{tikzpicture}%
       \board@pgf@background
       \begin{pgfscope}%
        \board@pgf@extrabackground
       \end{pgfscope}%
-     \end{pgfpicture}}%
+     \end{tikzpicture}}%
    \fi
 %% the board
    \ifUFCB@locset@inverse
@@ -1176,12 +1176,12 @@
 %%the markground picture
    \ifUFCB@locset@pgf
     \makebox[0pt]{%
-     \begin{pgfpicture}%
+     \begin{tikzpicture}%
       \board@pgf@markground
       \begin{pgfscope}%
        \csname board@pgf@extramarkground\endcsname
       \end{pgfscope}%
-     \end{pgfpicture}}%
+     \end{tikzpicture}}%
    \fi % end pgf
      \board@do@setpsnode
  %%
@@ -1436,7 +1436,7 @@
 
 %</chessboard>
 %<*chessboard-pgf>
-\ProvidesFile{chessboard-pgf.sty}[2020/11/01 version v1.9 pgf code for chessboard.sty]
+\ProvidesFile{chessboard-pgf.sty}[2024/11/07 version v2.0 pgf code for chessboard.sty]
 %%$Date: 2011/01/11 14:07:20 $$Version: 3d9f59c743f1 $
 
 \newcommand\board@pgf@extrabackground{}%
@@ -2558,7 +2558,7 @@
 
 %</chessboard-pgf>
 %<*chessboard-keys-main>
-\ProvidesFile{chessboard-keys-main.sty}[2020/11/01 version v1.9 key definitions for chessboard.sty]
+\ProvidesFile{chessboard-keys-main.sty}[2024/11/07 version v2.0 key definitions for chessboard.sty]
 %%$Date: 2011/03/23 08:42:57 $$Version: 66142533647c $
 
 %%file=Linie=column=vertikal=al_f_abetisch= a-h
@@ -4083,7 +4083,7 @@
 
 %</chessboard-keys-main>
 %<*chessboard-keys-pgf>
-\ProvidesFile{chessboard-keys-pgf.sty}[2020/11/01 version v1.9 key definitions for chessboard.sty]
+\ProvidesFile{chessboard-keys-pgf.sty}[2024/11/07 version v2.0 key definitions for chessboard.sty]
 %%$Date: 2011/03/17 13:42:38 $$Version: e7ec1b100ede $
 
 %% new 1.5.: style keys for curvemove
