@@ -1,4 +1,4 @@
-In version 1.9
-- Corrected a bug reported by Phelype Oleinik: colorbackareas (and other area keys) didn't process lists of areas correctly.
+In version 2.0
+- switch to tikzpicture for the decoration to simplify the definition of styles
 
 
