@@ -1,5 +1,5 @@
 # chessboard --- A package to print chessboards
-Packageversion: 2.0 Ulrike Fischer 2020
+Packageversion: 2.0 Ulrike Fischer 2024
 Packagedate: 2024-11-07
 
 ## LICENSE
